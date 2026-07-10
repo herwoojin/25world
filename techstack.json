@@ -1,0 +1,68 @@
+{
+  "project": "25world",
+  "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
+  "lastUpdated": "2026-07-10",
+  "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
+  "repo": "(GitHub 연동 예정)",
+  "categories": [
+    {
+      "name": "프론트엔드",
+      "items": [
+        { "name": "Next.js", "version": "14.2.x", "purpose": "App Router 기반 정적 사이트 생성", "config": "next.config.mjs (output:'export')" },
+        { "name": "React", "version": "18.3.x", "purpose": "UI 렌더링 (전 컴포넌트 서버 컴포넌트)" },
+        { "name": "TypeScript", "version": "5.x", "purpose": "strict 모드 타입 안전성, Site/Category 스키마 강제" },
+        { "name": "Tailwind CSS", "version": "3.4.x", "purpose": "스타일링 + scroll-left/right 캐러셀 키프레임", "config": "tailwind.config.ts" },
+        { "name": "shadcn/ui (Button·Badge·Card)", "purpose": "CTA 버튼 + 궤도 상세 카드 디자인 시스템", "config": "components/ui/" },
+        { "name": "Paperlogy 폰트", "purpose": "전역 서체 — 셀프호스팅 woff2 4종 (400/600/700/800), 외부 CDN 미사용", "config": "public/fonts/, app/globals.css" },
+        { "name": "CategoryOrbital", "purpose": "카테고리별 radial orbital UI — 자동 회전 노드 + 클릭 상세 카드", "config": "components/category-orbital.tsx" },
+        { "name": "@radix-ui/react-slot · class-variance-authority · clsx · tailwind-merge", "purpose": "shadcn Button 의존성 (asChild, variant, cn 유틸)" },
+        { "name": "lucide-react", "purpose": "테마 스위처 아이콘 (Sun/Moon/Scroll)" },
+        { "name": "테마 시스템", "purpose": "주간/야간/종이재질 3모드 — html 클래스 + localStorage('25world:theme'), 페인트 전 인라인 스크립트로 복원", "config": "components/theme-switcher.tsx, app/globals.css(.paper)" }
+      ]
+    },
+    {
+      "name": "PWA",
+      "items": [
+        { "name": "Web App Manifest", "purpose": "홈 화면 설치(standalone), 192/512/maskable 아이콘", "config": "public/manifest.webmanifest" },
+        { "name": "Service Worker", "purpose": "네트워크 우선 + 캐시 폴백 오프라인 지원 (프로덕션에서만 등록)", "config": "public/sw.js, components/pwa-register.tsx" }
+      ]
+    },
+    {
+      "name": "인증·접근제어",
+      "items": [
+        { "name": "Firebase Auth (Google 로그인)", "purpose": "첫 화면 로그인 게이트 — 로그인 후 포털 표시. npm 번들(CDN 미사용). 정적 사이트 특성상 UI 게이트", "config": "components/auth-gate.tsx, lib/firebase.ts" }
+      ]
+    },
+    {
+      "name": "AI·외부 API",
+      "items": [
+        { "name": "Apps Script 웹앱 (구글시트)", "purpose": "하단 블로그 섹션 글 목록 조회", "config": "components/blog-section.tsx" },
+        { "name": "Firebase Storage REST", "purpose": "블로그 글 본문 HTML 조회 + 다운로드 (공개 읽기)", "config": "components/blog-section.tsx" }
+      ]
+    },
+    {
+      "name": "데이터·스토리지",
+      "items": [
+        { "name": "lib/sites.ts", "purpose": "카테고리 5건 + 사이트 20건 + 사이트별 icon/art SVG — 단일 편집 지점 (DB 없음)" }
+      ]
+    },
+    {
+      "name": "산출물",
+      "items": [
+        { "name": "out/ 정적 출력", "purpose": "next build 결과물, Netlify 게시 디렉터리" }
+      ]
+    },
+    {
+      "name": "호스팅",
+      "items": [
+        { "name": "Netlify", "purpose": "정적 호스팅 (Build: npm run build / Publish: out)" }
+      ]
+    },
+    {
+      "name": "운영 가시성(Observability)",
+      "items": [
+        { "name": "배터리 인디케이터", "purpose": "해당 없음 — 백엔드/서버리스 함수가 전혀 없는 순수 정적 사이트" }
+      ]
+    }
+  ]
+}
