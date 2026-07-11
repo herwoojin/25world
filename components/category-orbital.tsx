@@ -165,8 +165,8 @@ export default function CategoryOrbital({
             {/* 노드 라벨 */}
             <div
               aria-hidden="true"
-              className={`pointer-events-none absolute left-0 top-8 -translate-x-1/2 whitespace-nowrap text-xs font-semibold tracking-wide transition-all duration-300 ${
-                isActive ? "scale-110 text-foreground" : "text-foreground/70"
+              className={`pointer-events-none absolute left-0 top-8 -translate-x-1/2 whitespace-nowrap text-sm font-bold tracking-wide transition-all duration-300 sm:text-base ${
+                isActive ? "scale-110 text-foreground" : "text-foreground/80"
               }`}
             >
               {site.name}
@@ -189,7 +189,7 @@ export default function CategoryOrbital({
                       {category.emoji} {category.name}
                     </Badge>
                   </div>
-                  <CardTitle className="mt-1 text-base">{site.name}</CardTitle>
+                  <CardTitle className="mt-1 text-lg">{site.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
                   {/* 사이트 고유 아트 미리보기 — lib/sites.ts 정적 SVG만 주입 (ERD §6-3) */}
@@ -203,7 +203,7 @@ export default function CategoryOrbital({
                       dangerouslySetInnerHTML={{ __html: site.art }}
                     />
                   </div>
-                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                     {site.desc}
                   </p>
                   <Button asChild size="sm" className="mt-3 w-full">

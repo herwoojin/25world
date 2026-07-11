@@ -12,7 +12,7 @@ export default function WorldHero() {
       {/* 도트 그리드 배경 (24px) */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:24px_24px] dark:bg-[radial-gradient(circle,rgba(255,255,255,0.06)_1px,transparent_1px)]"
+        className="absolute inset-0 bg-[radial-gradient(circle,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:24px_24px] dark:hidden"
       />
 
       <div className="relative mx-auto max-w-4xl px-4 text-center">

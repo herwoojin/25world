@@ -58,10 +58,15 @@ const config: Config = {
           "0%": { transform: "translateX(-50%)" },
           "100%": { transform: "translateX(0)" },
         },
+        twinkle: {
+          "0%, 100%": { opacity: "0.15" },
+          "50%": { opacity: "0.8" },
+        },
       },
       animation: {
         "scroll-left": "scroll-left 30s linear infinite",
         "scroll-right": "scroll-right 30s linear infinite",
+        twinkle: "twinkle 4s ease-in-out infinite",
       },
     },
   },

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import SiteHeader from "@/components/site-header";
+import SiteFooter from "@/components/site-footer";
 import PwaRegister from "@/components/pwa-register";
 import AuthGate from "@/components/auth-gate";
+import StarField from "@/components/star-field";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,9 +36,11 @@ export default function RootLayout({
     <html lang="ko" className="dark" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
+        <StarField />
         <AuthGate>
           <SiteHeader />
           {children}
+          <SiteFooter />
         </AuthGate>
         <PwaRegister />
       </body>

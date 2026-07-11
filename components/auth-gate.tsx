@@ -58,7 +58,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:24px_24px] dark:bg-[radial-gradient(circle,rgba(255,255,255,0.06)_1px,transparent_1px)]"
+        className="absolute inset-0 bg-[radial-gradient(circle,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:24px_24px] dark:hidden"
       />
       <div className="relative w-full max-w-sm rounded-2xl border border-zinc-200 bg-background/90 p-10 text-center shadow-xl backdrop-blur dark:border-zinc-800">
         <div className="text-5xl" aria-hidden="true">
