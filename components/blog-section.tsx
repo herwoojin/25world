@@ -15,6 +15,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
+import PostAudio from "@/components/post-audio";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml } from "@/lib/posts";
 import {
@@ -302,7 +303,7 @@ export default function BlogSection() {
           return (
             <article
               key={post.id}
-              className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
             >
               <a
                 href={`/post?id=${encodeURIComponent(post.id)}`}
@@ -325,6 +326,8 @@ export default function BlogSection() {
                   className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
                 />
               </a>
+
+              <PostAudio postId={post.id} title={post.title} />
 
               <button
                 type="button"
