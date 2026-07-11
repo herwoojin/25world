@@ -71,6 +71,14 @@ export default function HeaderNav() {
           </div>
         );
       })}
+      {/* 블로그 섹션 바로가기 */}
+      <a
+        href="#blog"
+        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800"
+      >
+        <span aria-hidden="true">📮</span>
+        유튜브 글로 다시 읽어보자
+      </a>
     </nav>
   );
 }
