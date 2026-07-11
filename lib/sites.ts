@@ -158,6 +158,16 @@ export const SITES: Site[] = [
     art: `<g stroke="#4DA3FF" fill="none" stroke-width="3"><path d="M30 44v52M22 56h16v28H22z"/><path d="M62 36v58M54 46h16v34H54z" stroke="#fff" opacity=".8"/><path d="M94 52v44M86 62h16v24H86z"/><path d="M20 132h84" opacity=".5"/><path d="M232 116l22-22 14 14 34-38" stroke="#fff" stroke-width="4"/><path d="M288 68h16v16" stroke="#fff" stroke-width="4"/><circle cx="254" cy="94" r="4" fill="#4DA3FF" stroke="none"/><path d="M228 132h76" opacity=".5" stroke-dasharray="5 6"/></g>`,
   },
 
+  {
+    id: "25w",
+    cat: "map",
+    name: "주식 거시지표 분석",
+    desc: "주식 거시(macro)지표 분석",
+    url: "https://25w.netlify.app",
+    icon: `<path d="M3 20.5h18"/><path d="M3.5 15c2.5-1 3.5-7 5.5-7s3 4.5 5 4.5S17.5 6 20.5 5"/><circle cx="9" cy="8" r="1.3" fill="currentColor"/><circle cx="14" cy="12.5" r="1.3" fill="currentColor"/>`,
+    art: `<g stroke="#4DA3FF" fill="none" stroke-width="3"><path d="M28 108a34 34 0 0 1 68 0" /><path d="M62 108L82 84" stroke="#fff" stroke-width="4"/><circle cx="62" cy="108" r="5" fill="#4DA3FF" stroke="none"/><path d="M34 124h56" opacity=".5"/><path d="M232 110c10-4 14-34 24-34s12 22 22 22 12-28 22-28" stroke="#fff" stroke-width="4"/><path d="M228 128h80" opacity=".5"/><circle cx="256" cy="76" r="4" fill="#4DA3FF" stroke="none"/><circle cx="278" cy="98" r="4" fill="#4DA3FF" stroke="none"/></g>`,
+  },
+
   // ───────────────────────── con #FF7A9E ─────────────────────────
   {
     id: "25y",
