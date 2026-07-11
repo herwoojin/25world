@@ -62,11 +62,16 @@ const config: Config = {
           "0%, 100%": { opacity: "0.15" },
           "50%": { opacity: "0.8" },
         },
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(calc(-100% - var(--gap)))" },
+        },
       },
       animation: {
         "scroll-left": "scroll-left 30s linear infinite",
         "scroll-right": "scroll-right 30s linear infinite",
         twinkle: "twinkle 4s ease-in-out infinite",
+        marquee: "marquee 40s linear infinite",
       },
     },
   },

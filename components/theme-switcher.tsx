@@ -29,6 +29,7 @@ export default function ThemeSwitcher() {
       localStorage.setItem("25world:theme", t);
     } catch {}
     setTheme(t);
+    window.dispatchEvent(new Event("25world:theme-changed"));
   };
 
   return (

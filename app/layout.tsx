@@ -4,6 +4,7 @@ import SiteFooter from "@/components/site-footer";
 import PwaRegister from "@/components/pwa-register";
 import AuthGate from "@/components/auth-gate";
 import StarField from "@/components/star-field";
+import DayWave from "@/components/day-wave";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <StarField />
+        <DayWave />
         <AuthGate>
           <SiteHeader />
           {children}
