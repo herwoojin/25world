@@ -4,7 +4,8 @@
 // 데스크톱(md+): 인라인 드롭다운 / 모바일: 햄버거 → 아코디언 패널
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
-import { CATEGORIES, SITES } from "@/lib/sites";
+import { CATEGORIES } from "@/lib/sites";
+import { useSites } from "@/lib/use-sites";
 
 const BLOG_LABEL = "유튜브 글로 다시 읽어보자";
 
@@ -13,6 +14,7 @@ export default function HeaderNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCat, setMobileCat] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const { sites: allSites } = useSites();
 
   // 바깥 클릭 시 닫기
   useEffect(() => {
@@ -40,7 +42,7 @@ export default function HeaderNav() {
         className="hidden items-center gap-0.5 md:flex"
       >
         {CATEGORIES.map((cat) => {
-          const sites = SITES.filter((s) => s.cat === cat.id);
+          const sites = allSites.filter((s) => s.cat === cat.id);
           const isOpen = open === cat.id;
           return (
             <div key={cat.id} className="relative">
@@ -116,7 +118,7 @@ export default function HeaderNav() {
           className="fixed inset-x-0 top-14 z-50 max-h-[72vh] overflow-y-auto border-b border-zinc-200 bg-background p-3 shadow-2xl dark:border-zinc-800 md:hidden"
         >
           {CATEGORIES.map((cat) => {
-            const sites = SITES.filter((s) => s.cat === cat.id);
+            const sites = allSites.filter((s) => s.cat === cat.id);
             const isOpen = mobileCat === cat.id;
             return (
               <div key={cat.id}>

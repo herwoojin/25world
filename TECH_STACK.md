@@ -33,6 +33,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | PWA | — | 홈 화면 설치 + 오프라인 | `public/manifest.webmanifest`, `public/sw.js` | SW는 프로덕션에서만 등록 |
 | Firebase Auth | 12.x (npm) | 첫 화면 구글 로그인 게이트 | `components/auth-gate.tsx`, `lib/firebase.ts` | UI 게이트 (정적 사이트) |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트 | `components/blog-section.tsx` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트) |
+| 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭 (Apps Script v3) |
 | Netlify | — | 호스팅 | — | Build `npm run build` / Publish `out` |
 
 ## 왜 이 선택인가

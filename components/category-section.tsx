@@ -1,16 +1,18 @@
+"use client";
+
 import type { CSSProperties } from "react";
 import CategoryOrbital from "@/components/category-orbital";
-import type { Category, Site } from "@/lib/sites";
+import type { Category } from "@/lib/sites";
+import { useSites } from "@/lib/use-sites";
 
 interface CategorySectionProps {
   category: Category;
-  sites: Site[];
 }
 
-export default function CategorySection({
-  category,
-  sites,
-}: CategorySectionProps) {
+export default function CategorySection({ category }: CategorySectionProps) {
+  const { sites } = useSites();
+  const catSites = sites.filter((s) => s.cat === category.id);
+
   return (
     <section
       id={`cat-${category.id}`}
@@ -26,10 +28,10 @@ export default function CategorySection({
         <span aria-hidden="true">{category.emoji}</span>
         <span>{category.name}</span>
         <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
-          ({sites.length})
+          ({catSites.length})
         </span>
       </h2>
-      <CategoryOrbital category={category} sites={sites} />
+      <CategoryOrbital category={category} sites={catSites} />
     </section>
   );
 }
