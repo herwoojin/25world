@@ -5,7 +5,7 @@
 // 반드시 이 파일에 정적으로 작성된 SVG 문자열만 허용한다.
 // 외부 입력·fetch 데이터를 절대 이 필드에 넣지 말 것 (ERD §6-3).
 
-export type CategoryId = "cvs" | "ai" | "map" | "con" | "util";
+export type CategoryId = "cvs" | "ai" | "map" | "con" | "util" | "ainative";
 
 export interface Category {
   id: CategoryId;
@@ -31,6 +31,7 @@ export const CATEGORIES: Category[] = [
   { id: "map", emoji: "🗺️", name: "지도 · 공공데이터", color: "#4DA3FF" },
   { id: "con", emoji: "🎬", name: "콘텐츠 제작", color: "#FF7A9E" },
   { id: "util", emoji: "🛠️", name: "생산성 · 유틸리티", color: "#FFC24D" },
+  { id: "ainative", emoji: "🏢", name: "AI네이티브조직", color: "#7ED957" },
 ];
 
 export const SITES: Site[] = [
