@@ -3,8 +3,17 @@
 // 하단 블로그 섹션 — 텔레그램 "글 저장" 봇으로 쌓인 글을 보여준다.
 // 목록: 구글시트 Apps Script 웹앱 / 본문: Firestore(posts) → Storage 폴백
 // 좋아요: Firestore likes 컬렉션 — 문서 id `{postId}_{uid}` 로 1인 1하트 보장
-import { useCallback, useEffect, useState } from "react";
-import { Download, ExternalLink, Heart, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Download,
+  ExternalLink,
+  Heart,
+  LayoutGrid,
+  List,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
@@ -16,6 +25,7 @@ import {
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import PostAudio from "@/components/post-audio";
+import PostCard from "@/components/post-card";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml } from "@/lib/posts";
 import {
@@ -31,6 +41,13 @@ interface BlogPost {
   from: string;
   file: string;
 }
+
+type View = "card" | "list";
+type Sort = "new" | "old" | "likes" | "title";
+
+// 보기 설정은 사용자별로 브라우저에 저장 (기본: 카드뉴스)
+const VIEW_KEY = "25world:blogView";
+const SORT_KEY = "25world:blogSort";
 
 function formatDate(s: string) {
   return s ? s.replace("T", " ").slice(0, 16) : "";
@@ -73,6 +90,8 @@ export default function BlogSection() {
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [myLikes, setMyLikes] = useState<Set<string>>(new Set());
   const [likeBusy, setLikeBusy] = useState<string | null>(null);
+  const [view, setViewState] = useState<View>("card");
+  const [sort, setSortState] = useState<Sort>("new");
   // 관리자 모드 (푸터 🔐 버튼으로 켜고 끔)
   const [adminKey, setAdminKey] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
@@ -91,6 +110,31 @@ export default function BlogSection() {
     window.addEventListener(ADMIN_EVENT, sync);
     return () => window.removeEventListener(ADMIN_EVENT, sync);
   }, []);
+
+  // 사용자별 보기 취향 복원 (기본: 카드뉴스 / 최신순)
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY);
+      if (v === "list" || v === "card") setViewState(v);
+      const s = localStorage.getItem(SORT_KEY);
+      if (s === "new" || s === "old" || s === "likes" || s === "title")
+        setSortState(s);
+    } catch {}
+  }, []);
+
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  };
+
+  const setSort = (s: Sort) => {
+    setSortState(s);
+    try {
+      localStorage.setItem(SORT_KEY, s);
+    } catch {}
+  };
 
   const loadPosts = useCallback(() => {
     return fetch(BLOG_WEBAPP_URL)
@@ -219,6 +263,22 @@ export default function BlogSection() {
     }
   };
 
+  const sortedPosts = useMemo(() => {
+    const list = [...(posts ?? [])];
+    switch (sort) {
+      case "old":
+        return list.sort((a, b) => (a.savedAt > b.savedAt ? 1 : -1));
+      case "likes":
+        return list.sort(
+          (a, b) => (likeCounts[b.id] ?? 0) - (likeCounts[a.id] ?? 0)
+        );
+      case "title":
+        return list.sort((a, b) => a.title.localeCompare(b.title, "ko"));
+      default:
+        return list.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
+    }
+  }, [posts, sort, likeCounts]);
+
   const download = async (post: BlogPost) => {
     const html = await fetchPostHtml(post.id);
     if (!html) return;
@@ -289,7 +349,54 @@ export default function BlogSection() {
         </div>
       )}
 
-      <div className="mt-6 space-y-3">
+      {/* 정렬 · 표시 방식 */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="표시 방식"
+          className="flex overflow-hidden rounded-full border border-zinc-300 dark:border-zinc-700"
+        >
+          {([
+            ["list", "목록", List],
+            ["card", "카드뉴스", LayoutGrid],
+          ] as const).map(([v, label, Icon]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                view === v
+                  ? "bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-white"
+                  : "text-zinc-500 hover:text-foreground dark:text-zinc-400"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as Sort)}
+          aria-label="정렬 기준"
+          className="rounded-full border border-zinc-300 bg-background px-3 py-1.5 text-xs font-semibold text-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-300"
+        >
+          <option value="new">최신순</option>
+          <option value="old">오래된순</option>
+          <option value="likes">좋아요순</option>
+          <option value="title">제목순</option>
+        </select>
+      </div>
+
+      <div
+        className={
+          view === "card"
+            ? "mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
+            : "mt-6 space-y-3"
+        }
+      >
         {error && <p className="text-sm text-red-400">{error}</p>}
         {posts === null && !error && (
           <p className="text-sm text-zinc-500">불러오는 중…</p>
@@ -297,36 +404,12 @@ export default function BlogSection() {
         {posts?.length === 0 && (
           <p className="text-sm text-zinc-500">아직 저장된 글이 없습니다.</p>
         )}
-        {posts?.map((post) => {
+        {sortedPosts.map((post) => {
           const liked = myLikes.has(post.id);
           const count = likeCounts[post.id] ?? 0;
-          return (
-            <article
-              key={post.id}
-              className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
-            >
-              <a
-                href={`/post?id=${encodeURIComponent(post.id)}`}
-                target="_blank"
-                rel="noopener"
-                title="새 탭에서 읽기"
-                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-bold group-hover:underline">
-                    {post.title}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDate(post.savedAt)}
-                    {post.from ? ` · ${post.from}` : ""}
-                  </span>
-                </span>
-                <ExternalLink
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
-                />
-              </a>
 
+          const actions = (
+            <>
               <PostAudio postId={post.id} title={post.title} />
 
               <button
@@ -382,6 +465,50 @@ export default function BlogSection() {
                   </Button>
                 </>
               )}
+            </>
+          );
+
+          if (view === "card") {
+            return (
+              <PostCard
+                key={post.id}
+                id={post.id}
+                title={post.title}
+                savedAt={post.savedAt}
+              >
+                {actions}
+              </PostCard>
+            );
+          }
+
+          return (
+            <article
+              key={post.id}
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
+            >
+              <a
+                href={`/post?id=${encodeURIComponent(post.id)}`}
+                target="_blank"
+                rel="noopener"
+                title="새 탭에서 읽기"
+                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-bold group-hover:underline">
+                    {post.title}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                    {formatDate(post.savedAt)}
+                    {post.from ? ` · ${post.from}` : ""}
+                  </span>
+                </span>
+                <ExternalLink
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
+                />
+              </a>
+
+              {actions}
             </article>
           );
         })}
