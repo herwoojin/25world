@@ -16,10 +16,9 @@ import {
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
+import { fetchPostHtml } from "@/lib/posts";
 import {
   BLOG_WEBAPP_URL,
-  BLOG_STORAGE_BUCKET,
-  firebaseConfig,
   getFirebaseApp,
   getFirebaseAuth,
 } from "@/lib/firebase";
@@ -30,27 +29,6 @@ interface BlogPost {
   savedAt: string;
   from: string;
   file: string;
-}
-
-// 본문 HTML 조회: ① Firestore(posts/{id} 문서) → ② Storage 파일 폴백
-async function fetchHtml(id: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/posts/${encodeURIComponent(id)}?key=${firebaseConfig.apiKey}`
-    );
-    if (res.ok) {
-      const docJson = await res.json();
-      const html = docJson.fields?.html?.stringValue;
-      if (html) return html;
-    }
-  } catch {}
-  try {
-    const res = await fetch(
-      `https://firebasestorage.googleapis.com/v0/b/${BLOG_STORAGE_BUCKET}/o/${encodeURIComponent(`posts/${id}.html`)}?alt=media`
-    );
-    if (res.ok) return res.text();
-  } catch {}
-  return null;
 }
 
 function formatDate(s: string) {
@@ -179,24 +157,6 @@ export default function BlogSection() {
     }
   };
 
-  // 새 창에서 글 읽기 — 팝업 차단을 피하려고 클릭 즉시 창을 연다
-  const openPost = (post: BlogPost) => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(
-      `<title>${post.title.replace(/</g, "&lt;")}</title><p style="font-family:sans-serif;padding:32px;color:#666">글을 불러오는 중…</p>`
-    );
-    fetchHtml(post.id).then((html) => {
-      if (w.closed) return;
-      w.document.open();
-      w.document.write(
-        html ??
-          `<p style="font-family:sans-serif;padding:32px">본문을 불러올 수 없습니다.</p>`
-      );
-      w.document.close();
-    });
-  };
-
   // ── 관리자 액션 ──────────────────────────────────────────
   const editTitle = async (post: BlogPost) => {
     const title = window.prompt("새 제목을 입력하세요", post.title);
@@ -259,7 +219,7 @@ export default function BlogSection() {
   };
 
   const download = async (post: BlogPost) => {
-    const html = await fetchHtml(post.id);
+    const html = await fetchPostHtml(post.id);
     if (!html) return;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const a = document.createElement("a");
@@ -344,11 +304,12 @@ export default function BlogSection() {
               key={post.id}
               className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
             >
-              <button
-                type="button"
-                onClick={() => openPost(post)}
-                title="새 창에서 읽기"
-                className="group flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+              <a
+                href={`/post?id=${encodeURIComponent(post.id)}`}
+                target="_blank"
+                rel="noopener"
+                title="새 탭에서 읽기"
+                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-bold group-hover:underline">
@@ -363,7 +324,7 @@ export default function BlogSection() {
                   aria-hidden="true"
                   className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
                 />
-              </button>
+              </a>
 
               <button
                 type="button"
