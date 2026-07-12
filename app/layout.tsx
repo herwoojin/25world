@@ -4,6 +4,8 @@ import SiteFooter from "@/components/site-footer";
 import PwaRegister from "@/components/pwa-register";
 import AuthGate from "@/components/auth-gate";
 import StarField from "@/components/star-field";
+import { NlmProvider } from "@/components/notebooklm/nlm-context";
+import { NotebookLMTray } from "@/components/notebooklm/notebooklm-tray";
 import DayWave from "@/components/day-wave";
 import "./globals.css";
 
@@ -40,9 +42,12 @@ export default function RootLayout({
         <StarField />
         <DayWave />
         <AuthGate>
-          <SiteHeader />
-          {children}
-          <SiteFooter />
+          <NlmProvider>
+            <SiteHeader />
+            {children}
+            <SiteFooter />
+            <NotebookLMTray />
+          </NlmProvider>
         </AuthGate>
         <PwaRegister />
       </body>

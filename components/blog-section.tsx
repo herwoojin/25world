@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
+import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
@@ -96,6 +97,10 @@ export default function BlogSection() {
   const [sort, setSortState] = useState<Sort>("new");
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
   const [catFilter, setCatFilter] = useState<BlogCatId | "all">("all");
+  const [origin, setOrigin] = useState("");
+
+  // NotebookLM 소스용 절대 URL 생성 (SSR 안전)
+  useEffect(() => setOrigin(window.location.origin), []);
   // 관리자 모드 (푸터 🔐 버튼으로 켜고 끔)
   const [adminKey, setAdminKey] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
@@ -466,8 +471,17 @@ export default function BlogSection() {
           const liked = myLikes.has(post.id);
           const count = likeCounts[post.id] ?? 0;
 
+          const nlmTitle = previews[post.id]?.heading || post.title;
           const actions = (
             <>
+              <NotebookLMButton
+                item={{
+                  id: post.id,
+                  title: nlmTitle,
+                  url: `${origin}/post?id=${encodeURIComponent(post.id)}`,
+                }}
+              />
+
               <PostAudio postId={post.id} title={post.title} />
 
               <button

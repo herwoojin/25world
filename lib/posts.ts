@@ -25,6 +25,19 @@ function stripTags(s: string) {
   return decodeEntities(s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
 }
 
+/** 블로그 HTML → 사람이 읽는 순수 텍스트 (NotebookLM 소스용) */
+export function extractPlainText(html: string): string {
+  const body = html
+    .replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  return decodeEntities(body)
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** 블로그 HTML → 카드뉴스용 미리보기(첫 이미지 · 첫 제목 · 첫 문단) */
 export function extractPreview(html: string): PostPreview {
   const body = html.replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, " ");
