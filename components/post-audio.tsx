@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Volume2, Play, Pause, Loader2 } from "lucide-react";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
-import { getFirebaseApp } from "@/lib/firebase";
+import { BOT_SERVER_URL, getFirebaseApp } from "@/lib/firebase";
 
 type Voice = "male" | "female";
 type Status = "idle" | "loading" | "generating" | "ready" | "error";
@@ -42,6 +42,8 @@ async function requestGeneration(postId: string, voice: Voice) {
     voice,
     createdAt: new Date().toISOString(),
   });
+  // 잠들어 있을 수 있는 생성 서버를 깨운다 (응답은 기다리지 않음)
+  fetch(`${BOT_SERVER_URL}/api/wake`, { mode: "no-cors" }).catch(() => {});
 }
 
 function fmt(sec: number) {

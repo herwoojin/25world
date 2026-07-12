@@ -23,3 +23,6 @@ export function getFirebaseAuth(): Auth {
 export const BLOG_WEBAPP_URL =
   "https://script.google.com/macros/s/AKfycbzaHHXKDthsK-sYeTqV0ntvD4lAXChmYHC4i9sh7V2jYy6kV_g73MB3_gPvyaH1LHzH/exec";
 export const BLOG_STORAGE_BUCKET = "jini-vibe-coding.firebasestorage.app";
+
+// 봇/TTS 서버 (Render) — 무료 플랜은 잠들 수 있어 요청 전에 깨운다
+export const BOT_SERVER_URL = "https://tg-post-saver.onrender.com";
