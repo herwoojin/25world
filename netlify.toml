@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "out"
+  functions = "netlify/functions"
+
+# /r/{글ID} — 크롤러(NotebookLM 등)가 읽을 수 있는 서버 렌더 글 페이지
+[[redirects]]
+  from = "/r/*"
+  to = "/.netlify/functions/post/:splat"
+  status = 200

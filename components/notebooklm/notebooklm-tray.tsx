@@ -76,7 +76,11 @@ export function NotebookLMTray() {
   };
 
   const copyUrls = async () => {
-    const ok = await copy(items.map((i) => i.url).join("\n"));
+    // NotebookLM 크롤러는 서버 HTML만 읽으므로, 본문을 그대로 내려주는 /r/{id} 주소를 준다
+    const urls = items.map(
+      (i) => `${window.location.origin}/r/${encodeURIComponent(i.id)}`
+    );
+    const ok = await copy(urls.join("\n"));
     show(ok ? `${count}개 URL 복사됨` : "복사에 실패했습니다");
   };
 
