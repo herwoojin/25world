@@ -28,6 +28,8 @@ import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml } from "@/lib/posts";
+import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
+import { loadAllPreviews, setPostCategory, type Preview } from "@/lib/previews";
 import {
   BLOG_WEBAPP_URL,
   getFirebaseApp,
@@ -92,6 +94,8 @@ export default function BlogSection() {
   const [likeBusy, setLikeBusy] = useState<string | null>(null);
   const [view, setViewState] = useState<View>("card");
   const [sort, setSortState] = useState<Sort>("new");
+  const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  const [catFilter, setCatFilter] = useState<BlogCatId | "all">("all");
   // 관리자 모드 (푸터 🔐 버튼으로 켜고 끔)
   const [adminKey, setAdminKey] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
@@ -151,7 +155,18 @@ export default function BlogSection() {
 
   useEffect(() => {
     loadPosts();
+    loadAllPreviews().then(setPreviews);
   }, [loadPosts]);
+
+  const changeCategory = async (postId: string, cat: BlogCatId) => {
+    setPreviews((prev) => ({
+      ...prev,
+      [postId]: { ...(prev[postId] ?? { image: null, heading: null, excerpt: null }), category: cat },
+    }));
+    await setPostCategory(postId, cat).catch(() =>
+      window.alert("카테고리 저장에 실패했습니다.")
+    );
+  };
 
   // 좋아요 현황 로드
   useEffect(() => {
@@ -264,7 +279,12 @@ export default function BlogSection() {
   };
 
   const sortedPosts = useMemo(() => {
-    const list = [...(posts ?? [])];
+    let list = [...(posts ?? [])];
+    if (catFilter !== "all") {
+      list = list.filter(
+        (p) => blogCat(previews[p.id]?.category).id === catFilter
+      );
+    }
     switch (sort) {
       case "old":
         return list.sort((a, b) => (a.savedAt > b.savedAt ? 1 : -1));
@@ -277,7 +297,7 @@ export default function BlogSection() {
       default:
         return list.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
     }
-  }, [posts, sort, likeCounts]);
+  }, [posts, sort, likeCounts, catFilter, previews]);
 
   const download = async (post: BlogPost) => {
     const html = await fetchPostHtml(post.id);
@@ -295,7 +315,7 @@ export default function BlogSection() {
       <h2 className="flex items-center gap-3 text-2xl font-bold tracking-tight">
         <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-zinc-400" />
         <span aria-hidden="true">📮</span>
-        <span>유튜브 글로 다시 읽어보자</span>
+        <span>유튜브, 글로 다시 읽어보자</span>
         <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
           ({posts?.length ?? "…"})
         </span>
@@ -390,6 +410,44 @@ export default function BlogSection() {
         </select>
       </div>
 
+      {/* 카테고리 필터 */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => setCatFilter("all")}
+          aria-pressed={catFilter === "all"}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            catFilter === "all"
+              ? "border-foreground bg-foreground text-background"
+              : "border-zinc-300 text-zinc-500 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
+          }`}
+        >
+          전체 {posts?.length ?? 0}
+        </button>
+        {BLOG_CATS.map((c) => {
+          const n =
+            posts?.filter((p) => blogCat(previews[p.id]?.category).id === c.id)
+              .length ?? 0;
+          const on = catFilter === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCatFilter(c.id)}
+              aria-pressed={on}
+              style={
+                on
+                  ? { backgroundColor: c.color, borderColor: c.color, color: "#0A0A0B" }
+                  : { borderColor: `${c.color}66`, color: c.color }
+              }
+              className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+            >
+              {c.emoji} {c.name} {n}
+            </button>
+          );
+        })}
+      </div>
+
       <div
         className={
           view === "card"
@@ -443,6 +501,20 @@ export default function BlogSection() {
 
               {adminKey && (
                 <>
+                  <select
+                    value={blogCat(previews[post.id]?.category).id}
+                    onChange={(e) =>
+                      changeCategory(post.id, e.target.value as BlogCatId)
+                    }
+                    aria-label={`${post.title} 카테고리 변경`}
+                    className="h-9 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {BLOG_CATS.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.emoji} {c.name}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     variant="outline"
                     size="icon"
@@ -475,6 +547,7 @@ export default function BlogSection() {
                 id={post.id}
                 title={post.title}
                 savedAt={post.savedAt}
+                preview={previews[post.id]}
               >
                 {actions}
               </PostCard>
@@ -494,8 +567,19 @@ export default function BlogSection() {
                 className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-bold group-hover:underline">
-                    {post.title}
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-zinc-900"
+                      style={{
+                        backgroundColor: blogCat(previews[post.id]?.category).color,
+                      }}
+                    >
+                      {blogCat(previews[post.id]?.category).emoji}{" "}
+                      {blogCat(previews[post.id]?.category).name}
+                    </span>
+                    <span className="truncate font-bold group-hover:underline">
+                      {previews[post.id]?.heading || post.title}
+                    </span>
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
                     {formatDate(post.savedAt)}

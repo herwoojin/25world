@@ -7,7 +7,7 @@ import { ChevronDown, Menu, X } from "lucide-react";
 import { CATEGORIES } from "@/lib/sites";
 import { useSites } from "@/lib/use-sites";
 
-const BLOG_LABEL = "유튜브 글로 다시 읽어보자";
+const BLOG_LABEL = "유튜브, 글로 다시 읽어보자";
 
 export default function HeaderNav() {
   const [open, setOpen] = useState<string | null>(null); // 데스크톱 드롭다운

@@ -1,71 +1,54 @@
 "use client";
 
-// 카드뉴스 카드 — 본문의 첫 이미지 + 첫 제목을 보여준다.
-// 미리보기는 Firestore `previews/{id}` 에서 읽고, 없으면 본문 HTML에서 직접 추출(폴백).
+// 카드뉴스 카드 — 본문의 첫 이미지 + 첫 제목 + 카테고리 배지
 import { useEffect, useRef, useState } from "react";
-import { doc, getDoc, getFirestore } from "firebase/firestore";
-import { getFirebaseApp } from "@/lib/firebase";
-import { extractPreview, fetchPostHtml, type PostPreview } from "@/lib/posts";
-
-// 같은 세션에서 재조회 방지
-const cache = new Map<string, PostPreview>();
-
-async function loadPreview(id: string): Promise<PostPreview> {
-  const hit = cache.get(id);
-  if (hit) return hit;
-
-  let preview: PostPreview = { image: null, heading: null, excerpt: null };
-  try {
-    const snap = await getDoc(doc(getFirestore(getFirebaseApp()), "previews", id));
-    if (snap.exists()) {
-      const d = snap.data();
-      preview = {
-        image: d.image ?? null,
-        heading: d.heading ?? null,
-        excerpt: d.excerpt ?? null,
-      };
-    }
-  } catch {}
-
-  // 서버 미리보기가 없으면 본문에서 직접 추출
-  if (!preview.image && !preview.heading) {
-    const html = await fetchPostHtml(id);
-    if (html) preview = extractPreview(html);
-  }
-
-  cache.set(id, preview);
-  return preview;
-}
+import { extractPreview, fetchPostHtml } from "@/lib/posts";
+import { blogCat } from "@/lib/blog-categories";
+import type { Preview } from "@/lib/previews";
 
 interface PostCardProps {
   id: string;
   title: string;
   savedAt: string;
+  /** 서버가 만든 미리보기 (없으면 본문에서 직접 추출) */
+  preview?: Preview;
   children?: React.ReactNode; // 액션 버튼(음성·하트·다운로드·관리자)
 }
 
-export default function PostCard({ id, title, savedAt, children }: PostCardProps) {
-  const [preview, setPreview] = useState<PostPreview | null>(null);
+export default function PostCard({
+  id,
+  title,
+  savedAt,
+  preview,
+  children,
+}: PostCardProps) {
+  const [fallback, setFallback] = useState<Preview | null>(null);
   const ref = useRef<HTMLElement>(null);
+  const hasPreview = Boolean(preview?.image || preview?.heading);
 
-  // 화면에 들어올 때만 로드 (본문 폴백이 무거울 수 있으므로)
+  // 서버 미리보기가 없을 때만 본문에서 추출 (화면에 들어올 때)
   useEffect(() => {
+    if (hasPreview) return;
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          io.disconnect();
-          loadPreview(id).then(setPreview);
-        }
+        if (!entries[0].isIntersecting) return;
+        io.disconnect();
+        fetchPostHtml(id).then((html) => {
+          if (html)
+            setFallback({ ...extractPreview(html), category: null } as Preview);
+        });
       },
       { rootMargin: "200px" }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [id]);
+  }, [id, hasPreview]);
 
-  const heading = preview?.heading || title;
+  const p = hasPreview ? preview! : fallback;
+  const heading = p?.heading || title;
+  const cat = blogCat(preview?.category);
 
   return (
     <article
@@ -80,11 +63,11 @@ export default function PostCard({ id, title, savedAt, children }: PostCardProps
         className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900">
-          {preview?.image ? (
-            // 본문 첫 이미지 (대부분 data URI) — next/image 불가, 정적 내보내기 호환
+          {p?.image ? (
+            // 본문 첫 이미지 (대부분 data URI) — 정적 내보내기 호환을 위해 img 사용
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={preview.image}
+              src={p.image}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -94,6 +77,12 @@ export default function PostCard({ id, title, savedAt, children }: PostCardProps
               📮
             </div>
           )}
+          <span
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold text-zinc-900 shadow"
+            style={{ backgroundColor: cat.color }}
+          >
+            {cat.emoji} {cat.name}
+          </span>
         </div>
         <div className="p-3">
           <h3 className="line-clamp-2 text-sm font-bold leading-snug group-hover:underline">
