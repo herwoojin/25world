@@ -12,6 +12,7 @@ import {
   List,
   Pencil,
   Plus,
+  Star,
   Trash2,
 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
@@ -26,7 +27,9 @@ import {
 import { Button } from "@/components/ui/button";
 import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
+import ActionMenu from "@/components/action-menu";
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
+import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
@@ -47,6 +50,7 @@ interface BlogPost {
 
 type View = "card" | "list";
 type Sort = "new" | "old" | "likes" | "title";
+type CatFilter = BlogCatId | "all" | "fav";
 
 // 보기 설정은 사용자별로 브라우저에 저장 (기본: 카드뉴스)
 const VIEW_KEY = "25world:blogView";
@@ -96,7 +100,9 @@ export default function BlogSection() {
   const [view, setViewState] = useState<View>("card");
   const [sort, setSortState] = useState<Sort>("new");
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
-  const [catFilter, setCatFilter] = useState<BlogCatId | "all">("all");
+  const [catFilter, setCatFilter] = useState<CatFilter>("all");
+  const [favs, setFavs] = useState<Set<string>>(new Set());
+  const [favBusy, setFavBusy] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
 
   // NotebookLM 소스용 절대 URL 생성 (SSR 안전)
@@ -171,6 +177,40 @@ export default function BlogSection() {
     await setPostCategory(postId, cat).catch(() =>
       window.alert("카테고리 저장에 실패했습니다.")
     );
+  };
+
+  // 내 즐겨찾기 로드
+  useEffect(() => {
+    if (!uid) {
+      setFavs(new Set());
+      return;
+    }
+    loadMyFavorites(uid).then(setFavs);
+  }, [uid]);
+
+  const toggleFav = async (postId: string) => {
+    if (!uid || favBusy) return;
+    setFavBusy(postId);
+    const on = !favs.has(postId);
+    setFavs((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(postId);
+      else next.delete(postId);
+      return next;
+    });
+    try {
+      await toggleFavorite(uid, postId, on);
+    } catch {
+      // 실패 시 롤백
+      setFavs((prev) => {
+        const next = new Set(prev);
+        if (on) next.delete(postId);
+        else next.add(postId);
+        return next;
+      });
+    } finally {
+      setFavBusy(null);
+    }
   };
 
   // 좋아요 현황 로드
@@ -285,7 +325,9 @@ export default function BlogSection() {
 
   const sortedPosts = useMemo(() => {
     let list = [...(posts ?? [])];
-    if (catFilter !== "all") {
+    if (catFilter === "fav") {
+      list = list.filter((p) => favs.has(p.id));
+    } else if (catFilter !== "all") {
       list = list.filter(
         (p) => blogCat(previews[p.id]?.category).id === catFilter
       );
@@ -302,7 +344,7 @@ export default function BlogSection() {
       default:
         return list.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
     }
-  }, [posts, sort, likeCounts, catFilter, previews]);
+  }, [posts, sort, likeCounts, catFilter, previews, favs]);
 
   const download = async (post: BlogPost) => {
     const html = await fetchPostHtml(post.id);
@@ -429,6 +471,23 @@ export default function BlogSection() {
         >
           전체 {posts?.length ?? 0}
         </button>
+        <button
+          type="button"
+          onClick={() => setCatFilter("fav")}
+          aria-pressed={catFilter === "fav"}
+          className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            catFilter === "fav"
+              ? "border-amber-400 bg-amber-400 text-zinc-900"
+              : "border-amber-400/50 text-amber-500 hover:border-amber-400"
+          }`}
+        >
+          <Star
+            className={`h-3.5 w-3.5 ${catFilter === "fav" ? "fill-current" : ""}`}
+            aria-hidden="true"
+          />
+          즐겨찾기 {favs.size}
+        </button>
+
         {BLOG_CATS.map((c) => {
           const n =
             posts?.filter((p) => blogCat(previews[p.id]?.category).id === c.id)
@@ -472,25 +531,18 @@ export default function BlogSection() {
           const count = likeCounts[post.id] ?? 0;
 
           const nlmTitle = previews[post.id]?.heading || post.title;
+          const faved = favs.has(post.id);
+
+          // 하트·즐겨찾기는 항상 노출, 나머지는 ⋯ 드롭다운으로 묶는다
           const actions = (
             <>
-              <NotebookLMButton
-                item={{
-                  id: post.id,
-                  title: nlmTitle,
-                  url: `${origin}/post?id=${encodeURIComponent(post.id)}`,
-                }}
-              />
-
-              <PostAudio postId={post.id} title={post.title} />
-
               <button
                 type="button"
                 onClick={() => toggleLike(post.id)}
                 aria-pressed={liked}
                 aria-label={liked ? "좋아요 취소" : "좋아요"}
                 disabled={likeBusy === post.id}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
                   liked
                     ? "border-rose-400/60 text-rose-500"
                     : "border-zinc-300 text-zinc-500 hover:border-rose-400/60 hover:text-rose-500 dark:border-zinc-700 dark:text-zinc-400"
@@ -503,54 +555,85 @@ export default function BlogSection() {
                 {count}
               </button>
 
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => download(post)}
-                aria-label={`${post.title} HTML 다운로드`}
-                className="h-9 w-9 shrink-0"
+              <button
+                type="button"
+                onClick={() => toggleFav(post.id)}
+                aria-pressed={faved}
+                aria-label={faved ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                title={faved ? "즐겨찾기 해제" : "즐겨찾기"}
+                disabled={favBusy === post.id}
+                className={`flex min-h-[44px] w-11 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                  faved
+                    ? "border-amber-400/60 text-amber-500"
+                    : "border-zinc-300 text-zinc-500 hover:border-amber-400/60 hover:text-amber-500 dark:border-zinc-700 dark:text-zinc-400"
+                }`}
               >
-                <Download className="h-4 w-4" aria-hidden="true" />
-              </Button>
+                <Star
+                  aria-hidden="true"
+                  className={`h-4 w-4 ${faved ? "fill-current" : ""}`}
+                />
+              </button>
 
-              {adminKey && (
-                <>
-                  <select
-                    value={blogCat(previews[post.id]?.category).id}
-                    onChange={(e) =>
-                      changeCategory(post.id, e.target.value as BlogCatId)
-                    }
-                    aria-label={`${post.title} 카테고리 변경`}
-                    className="h-9 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {BLOG_CATS.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.emoji} {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => editTitle(post)}
-                    disabled={adminBusy}
-                    aria-label={`${post.title} 제목 수정`}
-                    className="h-9 w-9 shrink-0 text-amber-500"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removePost(post)}
-                    disabled={adminBusy}
-                    aria-label={`${post.title} 삭제`}
-                    className="h-9 w-9 shrink-0 text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </>
-              )}
+              <ActionMenu label={`${nlmTitle} 더보기`}>
+                <NotebookLMButton
+                  item={{
+                    id: post.id,
+                    title: nlmTitle,
+                    url: `${origin}/post?id=${encodeURIComponent(post.id)}`,
+                  }}
+                />
+
+                <PostAudio postId={post.id} title={post.title} />
+
+                <Button
+                  variant="outline"
+                  onClick={() => download(post)}
+                  aria-label={`${post.title} HTML 다운로드`}
+                  className="min-h-[44px] justify-start gap-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  다운로드
+                </Button>
+
+                {adminKey && (
+                  <>
+                    <select
+                      value={blogCat(previews[post.id]?.category).id}
+                      onChange={(e) =>
+                        changeCategory(post.id, e.target.value as BlogCatId)
+                      }
+                      aria-label={`${post.title} 카테고리 변경`}
+                      className="min-h-[44px] rounded-md border border-input bg-background px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {BLOG_CATS.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.emoji} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      onClick={() => editTitle(post)}
+                      disabled={adminBusy}
+                      aria-label={`${post.title} 제목 수정`}
+                      className="min-h-[44px] justify-start gap-2 text-amber-500"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                      제목 수정
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => removePost(post)}
+                      disabled={adminBusy}
+                      aria-label={`${post.title} 삭제`}
+                      className="min-h-[44px] justify-start gap-2 text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      삭제
+                    </Button>
+                  </>
+                )}
+              </ActionMenu>
             </>
           );
 
