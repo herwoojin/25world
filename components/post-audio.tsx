@@ -183,22 +183,22 @@ export default function PostAudio({
         onClick={onToggleOpen}
         aria-expanded={open}
         aria-label={`${title} 음성 재생`}
-        className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`flex min-h-[44px] w-full items-center justify-start gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           open
             ? "border-sky-400/60 text-sky-400"
-            : "border-zinc-300 text-zinc-500 hover:border-sky-400/60 hover:text-sky-400 dark:border-zinc-700 dark:text-zinc-400"
+            : "border-input text-foreground hover:border-sky-400/60 hover:text-sky-400"
         }`}
       >
         {status === "loading" || status === "generating" ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
         ) : (
-          <Volume2 className="h-4 w-4" aria-hidden="true" />
+          <Volume2 className="h-4 w-4 shrink-0" aria-hidden="true" />
         )}
-        <span className="hidden sm:inline">음성</span>
+        <span>음성으로 듣기</span>
       </button>
 
       {open && (
-        <div className="mt-2 w-full basis-full rounded-lg border border-zinc-200 bg-background/80 p-3 dark:border-zinc-800">
+        <div className="w-full rounded-lg border border-zinc-200 bg-background/80 p-3 dark:border-zinc-800">
           {status === "generating" && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               🎙️ 음성을 생성하고 있습니다… 글 길이에 따라 1~5분 걸릴 수 있어요.
