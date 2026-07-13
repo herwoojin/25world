@@ -47,10 +47,9 @@ export default function ActionMenu({
       </button>
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="absolute bottom-full right-0 z-40 mb-2 flex w-max max-w-[80vw] flex-col items-stretch gap-1.5 rounded-xl border border-zinc-200 bg-background p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-        >
+        // 내부 클릭으로는 닫지 않는다 (select 선택·음성 플레이어 조작을 위해).
+        // 닫기: 바깥 클릭 · ESC · ⋯ 버튼 다시 클릭
+        <div className="absolute bottom-full right-0 z-40 mb-2 flex w-max min-w-[300px] max-w-[86vw] flex-col items-stretch gap-1.5 rounded-xl border border-zinc-200 bg-background p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           {children}
         </div>
       )}
