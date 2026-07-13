@@ -179,13 +179,27 @@ export default function BlogSection() {
     );
   };
 
-  // 내 즐겨찾기 로드
+  // 내 즐겨찾기 로드 (서버 저장 — 어느 기기에서 로그인해도 동일)
   useEffect(() => {
     if (!uid) {
       setFavs(new Set());
       return;
     }
-    loadMyFavorites(uid).then(setFavs);
+    let alive = true;
+    const load = () =>
+      loadMyFavorites(uid).then((s) => {
+        if (alive) setFavs(s);
+      });
+    load();
+    // 탭으로 돌아오면 최신 상태로 동기화 (다른 기기에서 바꾼 경우 반영)
+    const onFocus = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, [uid]);
 
   const toggleFav = async (postId: string) => {

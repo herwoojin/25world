@@ -78,13 +78,15 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <>
         {children}
+        {/* 로그인 계정 표시 — 기기마다 같은 계정인지 바로 확인할 수 있게 */}
         <button
           type="button"
           onClick={() => signOut(getFirebaseAuth())}
-          title={email}
-          className="fixed bottom-3 left-3 z-40 rounded-full border border-zinc-300 bg-background/80 px-3 py-1.5 text-xs text-zinc-500 backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-400"
+          title={`${email} — 클릭하면 로그아웃`}
+          className="fixed bottom-3 left-3 z-40 flex max-w-[70vw] items-center gap-1.5 rounded-full border border-zinc-300 bg-background/80 px-3 py-1.5 text-xs text-zinc-500 backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-400"
         >
-          🚪 로그아웃
+          <span aria-hidden="true">🚪</span>
+          <span className="truncate">{email || "로그아웃"}</span>
         </button>
       </>
     );

@@ -1,5 +1,5 @@
 // 25world 서비스 워커 — 네트워크 우선, 실패 시 캐시 폴백 (오프라인 지원)
-const CACHE = "25world-v1";
+const CACHE = "25world-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
