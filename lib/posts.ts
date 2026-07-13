@@ -1,6 +1,28 @@
 // 블로그 글 본문 조회 — ① Firestore(posts/{id} 문서) → ② Storage 파일 폴백
 import { BLOG_STORAGE_BUCKET, firebaseConfig } from "@/lib/firebase";
 
+/** 저장 시각(UTC)을 한국 표준시로 표시 — "YYYY-MM-DD HH:mm" */
+export function formatKST(savedAt: string): string {
+  if (!savedAt) return "";
+  // 시트/서버는 UTC 로 저장한다. "…Z" 또는 "YYYY-MM-DD HH:mm:ss" 둘 다 지원
+  const iso = savedAt.includes("T")
+    ? savedAt
+    : `${savedAt.replace(" ", "T")}Z`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return savedAt.replace("T", " ").slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 export interface PostPreview {
   /** 본문에 처음 등장하는 이미지 (src 또는 data URI) */
   image: string | null;

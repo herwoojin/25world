@@ -2,7 +2,7 @@
 
 // 카드뉴스 카드 — 본문의 첫 이미지 + 첫 제목 + 카테고리 배지
 import { useEffect, useRef, useState } from "react";
-import { extractPreview, fetchPostHtml } from "@/lib/posts";
+import { extractPreview, fetchPostHtml, formatKST } from "@/lib/posts";
 import { blogCat } from "@/lib/blog-categories";
 import type { Preview } from "@/lib/previews";
 
@@ -89,7 +89,7 @@ export default function PostCard({
             {heading}
           </h3>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {savedAt.replace("T", " ").slice(0, 16)}
+            {formatKST(savedAt)}
           </p>
         </div>
       </a>

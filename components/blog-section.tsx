@@ -31,7 +31,7 @@ import ActionMenu from "@/components/action-menu";
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
-import { fetchPostHtml } from "@/lib/posts";
+import { fetchPostHtml, formatKST } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
 import { loadAllPreviews, setPostCategory, type Preview } from "@/lib/previews";
 import {
@@ -56,9 +56,7 @@ type CatFilter = BlogCatId | "all" | "fav";
 const VIEW_KEY = "25world:blogView";
 const SORT_KEY = "25world:blogSort";
 
-function formatDate(s: string) {
-  return s ? s.replace("T", " ").slice(0, 16) : "";
-}
+const formatDate = formatKST;
 
 function escapeHtml(s: string) {
   return s
