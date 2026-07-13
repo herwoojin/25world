@@ -4,8 +4,7 @@
 // 데스크톱(md+): 인라인 드롭다운 / 모바일: 햄버거 → 아코디언 패널
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
-import { CATEGORIES } from "@/lib/sites";
-import { useSites } from "@/lib/use-sites";
+import { useCategories, useSites } from "@/lib/use-sites";
 
 const BLOG_LABEL = "유튜브, 글로 다시 읽어보자";
 
@@ -15,6 +14,7 @@ export default function HeaderNav() {
   const [mobileCat, setMobileCat] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { sites: allSites } = useSites();
+  const CATEGORIES = useCategories();
 
   // 바깥 클릭 시 닫기
   useEffect(() => {

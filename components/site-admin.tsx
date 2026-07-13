@@ -1,14 +1,21 @@
 "use client";
 
-// 관리자 사이트 관리 패널 — 카테고리·이름·설명·URL 입력으로 사이트를
-// 구글시트 'sites' 탭에 등록/수정/삭제. 재배포 없이 즉시 반영.
-// (코드에 내장된 기본 사이트 22종은 여기서 편집되지 않음 — lib/sites.ts 관리)
-import { useEffect, useState } from "react";
-import { Plus, Trash2, Pencil } from "lucide-react";
+// 관리자 패널 — 사이트 추가/관리 + 카테고리 제목 편집 + 사이트 순서·이동
+// 사이트 데이터: 구글시트 'sites' 탭 / 표시 설정: Firestore siteMeta/config
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { CATEGORIES } from "@/lib/sites";
-import { useSites, webappPost } from "@/lib/use-sites";
+import { useCategories, useSites, webappPost } from "@/lib/use-sites";
+import { saveSiteConfig, useSiteConfig, type SiteConfig } from "@/lib/site-config";
 
 function makeSiteId(url: string, taken: Set<string>) {
   let base = "site";
@@ -24,11 +31,17 @@ function makeSiteId(url: string, taken: Set<string>) {
 export default function SiteAdmin() {
   const [adminKey, setAdminKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [cat, setCat] = useState(CATEGORIES[0].id as string);
+  const [cat, setCat] = useState<string>(CATEGORIES[0].id);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [url, setUrl] = useState("");
+
   const { sites, dynamic } = useSites();
+  const categories = useCategories();
+  const cfg = useSiteConfig();
+  const [draft, setDraft] = useState<SiteConfig>(cfg);
+
+  useEffect(() => setDraft(cfg), [cfg]);
 
   useEffect(() => {
     const sync = () => setAdminKey(getAdminKey());
@@ -37,9 +50,58 @@ export default function SiteAdmin() {
     return () => window.removeEventListener(ADMIN_EVENT, sync);
   }, []);
 
+  // 카테고리별 현재 순서 (설정에 없는 사이트는 뒤에 붙는다)
+  const grouped = useMemo(() => {
+    const out: Record<string, typeof sites> = {};
+    for (const c of CATEGORIES) out[c.id] = sites.filter((s) => s.cat === c.id);
+    return out;
+  }, [sites]);
+
   if (!adminKey) return null;
 
-  const add = async () => {
+  const persist = async (next: SiteConfig) => {
+    setDraft(next);
+    setBusy(true);
+    try {
+      await saveSiteConfig(next);
+    } catch {
+      window.alert("설정 저장에 실패했습니다. (Firestore 규칙에 siteMeta 허용 필요)");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCategory = (id: string, name: string, emoji: string) =>
+    persist({
+      ...draft,
+      cats: { ...draft.cats, [id]: { name: name.trim(), emoji: emoji.trim() } },
+    });
+
+  /** 카테고리 안에서 사이트 위치 이동 */
+  const move = (catId: string, siteId: string, dir: -1 | 1) => {
+    const current = grouped[catId].map((s) => s.id);
+    const i = current.indexOf(siteId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= current.length) return;
+    [current[i], current[j]] = [current[j], current[i]];
+    persist({ ...draft, order: { ...draft.order, [catId]: current } });
+  };
+
+  /** 사이트를 다른 카테고리로 이동 */
+  const moveToCategory = (siteId: string, toCat: string) => {
+    const next: SiteConfig = {
+      ...draft,
+      catOf: { ...draft.catOf, [siteId]: toCat },
+    };
+    // 옮겨간 카테고리의 순서 목록 맨 뒤에 추가
+    const target = (next.order[toCat] ?? grouped[toCat].map((s) => s.id)).filter(
+      (id) => id !== siteId
+    );
+    next.order = { ...next.order, [toCat]: [...target, siteId] };
+    persist(next);
+  };
+
+  const addSite = async () => {
     const u = url.trim();
     if (!name.trim() || !u.startsWith("https://")) {
       window.alert("이름과 https:// 로 시작하는 URL을 입력하세요.");
@@ -58,11 +120,7 @@ export default function SiteAdmin() {
         url: u,
       });
       if (!r.includes("ok")) {
-        window.alert(
-          "등록 실패: " +
-            r +
-            "\n(앱스크립트가 v3 인지 확인하세요 — 사이트 관리 기능은 v3 필요)"
-        );
+        window.alert("등록 실패: " + r);
         return;
       }
       window.location.reload();
@@ -71,7 +129,7 @@ export default function SiteAdmin() {
     }
   };
 
-  const edit = async (id: string) => {
+  const editSite = async (id: string) => {
     const site = dynamic.find((s) => s.id === id);
     if (!site) return;
     const newName = window.prompt("사이트 이름", site.name);
@@ -98,7 +156,7 @@ export default function SiteAdmin() {
     }
   };
 
-  const remove = async (id: string, siteName: string) => {
+  const removeSite = async (id: string, siteName: string) => {
     if (!window.confirm(`"${siteName}" 사이트를 삭제할까요?`)) return;
     setBusy(true);
     try {
@@ -114,89 +172,195 @@ export default function SiteAdmin() {
     "w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700";
 
   return (
-    <section className="rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">
+    <section className="space-y-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">
       <h2 className="text-sm font-bold text-amber-500">
-        🔓 관리자 — 사이트 추가/관리 (저장 즉시 웹에 반영)
+        🔓 관리자 — 사이트 · 카테고리 관리 (저장 즉시 반영)
       </h2>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <select
-          value={cat}
-          onChange={(e) => setCat(e.target.value)}
-          aria-label="카테고리"
-          className={inputCls}
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.emoji} {c.name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="사이트 이름 (~14자)"
-          className={inputCls}
-        />
-        <input
-          type="text"
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-          placeholder="한 줄 설명 (~40자)"
-          className={inputCls}
-        />
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.netlify.app"
-          className={inputCls}
-        />
-      </div>
-      <Button size="sm" className="mt-2" onClick={add} disabled={busy}>
-        <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-        {busy ? "처리 중…" : "사이트 등록"}
-      </Button>
 
-      {dynamic.length > 0 && (
-        <div className="mt-4 space-y-1.5 border-t border-amber-400/30 pt-3">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            관리자 등록 사이트 ({dynamic.length})
-          </p>
-          {dynamic.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
-            >
-              <span aria-hidden="true">
-                {CATEGORIES.find((c) => c.id === s.cat)?.emoji}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                <b>{s.name}</b>
-                <span className="ml-2 text-xs text-zinc-500">{s.url}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => edit(s.id)}
-                disabled={busy}
-                aria-label={`${s.name} 수정`}
-                className="text-amber-500 hover:opacity-70 disabled:opacity-40"
-              >
-                <Pencil className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(s.id, s.name)}
-                disabled={busy}
-                aria-label={`${s.name} 삭제`}
-                className="text-red-500 hover:opacity-70 disabled:opacity-40"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          ))}
+      {/* 사이트 추가 */}
+      <div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <select
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
+            aria-label="카테고리"
+            className={inputCls}
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.emoji} {c.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="사이트 이름 (~14자)"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="한 줄 설명 (~40자)"
+            className={inputCls}
+          />
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.netlify.app"
+            className={inputCls}
+          />
         </div>
-      )}
+        <Button size="sm" className="mt-2" onClick={addSite} disabled={busy}>
+          <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+          {busy ? "처리 중…" : "사이트 등록"}
+        </Button>
+      </div>
+
+      {/* 카테고리 제목 편집 + 사이트 순서·이동 */}
+      <div className="space-y-3 border-t border-amber-400/30 pt-3">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          카테고리 제목·이모지를 바꾸고, 사이트를 위/아래로 옮기거나 다른
+          카테고리로 이동할 수 있습니다.
+        </p>
+
+        {CATEGORIES.map((base) => {
+          const cur = draft.cats[base.id] ?? {};
+          const list = grouped[base.id] ?? [];
+          return (
+            <div
+              key={base.id}
+              className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: base.color }}
+                />
+                <input
+                  type="text"
+                  value={cur.emoji ?? base.emoji}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      cats: {
+                        ...draft.cats,
+                        [base.id]: { ...cur, emoji: e.target.value },
+                      },
+                    })
+                  }
+                  aria-label={`${base.name} 이모지`}
+                  className="w-14 rounded-md border border-zinc-300 bg-background px-2 py-1.5 text-center text-sm dark:border-zinc-700"
+                />
+                <input
+                  type="text"
+                  value={cur.name ?? base.name}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      cats: {
+                        ...draft.cats,
+                        [base.id]: { ...cur, name: e.target.value },
+                      },
+                    })
+                  }
+                  aria-label={`${base.name} 제목`}
+                  className="min-w-[140px] flex-1 rounded-md border border-zinc-300 bg-background px-2 py-1.5 text-sm font-bold dark:border-zinc-700"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    saveCategory(
+                      base.id,
+                      cur.name ?? base.name,
+                      cur.emoji ?? base.emoji
+                    )
+                  }
+                >
+                  <Save className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                  저장
+                </Button>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {list.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-wrap items-center gap-1.5 rounded-md border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-800"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      <b>{s.name}</b>
+                      <span className="ml-2 text-xs text-zinc-500">{s.url}</span>
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => move(base.id, s.id, -1)}
+                      disabled={busy || i === 0}
+                      aria-label={`${s.name} 위로`}
+                      className="rounded p-1 text-zinc-500 hover:text-foreground disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(base.id, s.id, 1)}
+                      disabled={busy || i === list.length - 1}
+                      aria-label={`${s.name} 아래로`}
+                      className="rounded p-1 text-zinc-500 hover:text-foreground disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    </button>
+
+                    <select
+                      value={base.id}
+                      onChange={(e) => moveToCategory(s.id, e.target.value)}
+                      disabled={busy}
+                      aria-label={`${s.name} 카테고리 이동`}
+                      className="rounded-md border border-zinc-300 bg-background px-1.5 py-1 text-xs dark:border-zinc-700"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.emoji} {c.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {dynamic.some((d) => d.id === s.id) && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => editSite(s.id)}
+                          disabled={busy}
+                          aria-label={`${s.name} 수정`}
+                          className="rounded p-1 text-amber-500 hover:opacity-70 disabled:opacity-40"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSite(s.id, s.name)}
+                          disabled={busy}
+                          aria-label={`${s.name} 삭제`}
+                          className="rounded p-1 text-red-500 hover:opacity-70 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

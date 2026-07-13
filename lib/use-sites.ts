@@ -5,6 +5,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { CATEGORIES, SITES, type CategoryId, type Site } from "@/lib/sites";
 import { BLOG_WEBAPP_URL } from "@/lib/firebase";
+import {
+  applyCategories,
+  applySites,
+  useSiteConfig,
+} from "@/lib/site-config";
 
 export interface DynSiteRow {
   id: string;
@@ -54,9 +59,11 @@ function loadDynamicSites(): Promise<Site[]> {
   return cache;
 }
 
-/** 내장 + 동적 사이트 병합 목록 */
+/** 내장 + 동적 사이트 병합 목록 (관리자 설정: 카테고리 이동·정렬 반영) */
 export function useSites(): { sites: Site[]; dynamic: Site[] } {
   const [dynamic, setDynamic] = useState<Site[]>([]);
+  const cfg = useSiteConfig();
+
   useEffect(() => {
     let mounted = true;
     loadDynamicSites().then((d) => {
@@ -66,10 +73,17 @@ export function useSites(): { sites: Site[]; dynamic: Site[] } {
       mounted = false;
     };
   }, []);
+
   return useMemo(
-    () => ({ sites: [...SITES, ...dynamic], dynamic }),
-    [dynamic]
+    () => ({ sites: applySites([...SITES, ...dynamic], cfg), dynamic }),
+    [dynamic, cfg]
   );
+}
+
+/** 카테고리 목록 (관리자가 수정한 제목·이모지 반영) */
+export function useCategories() {
+  const cfg = useSiteConfig();
+  return useMemo(() => applyCategories(cfg), [cfg]);
 }
 
 // Apps Script 웹앱 POST — Content-Type 미지정(text/plain)으로 CORS preflight 회피
