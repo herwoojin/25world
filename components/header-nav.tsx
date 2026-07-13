@@ -16,17 +16,31 @@ export default function HeaderNav() {
   const { sites: allSites } = useSites();
   const CATEGORIES = useCategories();
 
-  // 바깥 클릭 시 닫기
+  // 바깥 클릭 시 닫기.
+  // click 이 아니라 pointerdown 을 쓴다: click 시점에는 React 가 이미 리렌더를 마쳐
+  // 방금 누른 아이콘(Menu→X)이 DOM 에서 교체·분리되고, contains() 가 false 가 되어
+  // 열자마자 다시 닫히는 문제가 생긴다. pointerdown 은 리렌더 전에 발생한다.
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
+    if (!open && !mobileOpen) return;
+    const onDown = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(null);
         setMobileOpen(false);
       }
     };
-    document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
-  }, []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(null);
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, mobileOpen]);
 
   const closeAll = () => {
     setOpen(null);
@@ -103,7 +117,8 @@ export default function HeaderNav() {
         aria-expanded={mobileOpen}
         aria-label="카테고리 메뉴 열기"
         onClick={() => setMobileOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800 md:hidden"
+        // 아이콘(svg)이 아니라 버튼이 항상 이벤트 대상이 되게 하고, 터치 지연을 없앤다
+        className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800 md:hidden [&_svg]:pointer-events-none"
       >
         {mobileOpen ? (
           <X className="h-5 w-5" aria-hidden="true" />
