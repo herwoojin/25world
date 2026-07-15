@@ -17,7 +17,9 @@ export default function CategorySection({ category }: CategorySectionProps) {
     <section
       id={`cat-${category.id}`}
       style={{ "--cc": category.color } as CSSProperties}
-      className="scroll-mt-16"
+      // isolate: 내부 궤도 노드의 z-index(100~200)를 이 섹션 안에 가둬
+      // sticky 헤더(z-40) 위로 뚫고 올라오지 않게 한다
+      className="relative isolate scroll-mt-16"
     >
       <h2 className="flex items-center gap-3 text-2xl font-bold tracking-tight">
         <span

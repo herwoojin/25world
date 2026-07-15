@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import IconMarquee from "@/components/icon-marquee";
+import { SpotlightReveal } from "@/components/ui/image-reveal";
 import { CATEGORIES } from "@/lib/sites";
 import { useSites } from "@/lib/use-sites";
 
@@ -34,19 +35,25 @@ export default function WorldHero() {
         </Button>
       </div>
 
-      {/* 아이콘 무한 캐러셀 2줄 + 좌우 페이드 오버레이 */}
-      <div className="relative mt-14 space-y-5 sm:mt-16 sm:space-y-6">
-        <IconMarquee sites={row1} direction="left" />
-        <IconMarquee sites={row2} direction="right" />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 !mt-0 w-24 bg-gradient-to-r from-background to-transparent"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 !mt-0 w-24 bg-gradient-to-l from-background to-transparent"
-        />
-      </div>
+      {/* 아이콘 무한 캐러셀 2줄 — 마우스를 따라 스포트라이트가 아이콘을 또렷하게 비춘다 */}
+      <SpotlightReveal
+        className="mt-14 sm:mt-16"
+        dim={0.55}
+        blur={3}
+      >
+        <div className="space-y-5 sm:space-y-6">
+          <IconMarquee sites={row1} direction="left" />
+          <IconMarquee sites={row2} direction="right" />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 !mt-0 w-24 bg-gradient-to-r from-background to-transparent"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 !mt-0 w-24 bg-gradient-to-l from-background to-transparent"
+          />
+        </div>
+      </SpotlightReveal>
     </section>
   );
 }
