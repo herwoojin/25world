@@ -21,17 +21,9 @@ export default function CategorySection({ category }: CategorySectionProps) {
       // sticky 헤더(z-40) 위로 뚫고 올라오지 않게 한다
       className="relative isolate scroll-mt-16"
     >
-      <h2 className="flex items-center gap-3 text-2xl font-bold tracking-tight">
-        <span
-          aria-hidden="true"
-          className="h-3 w-3 shrink-0 rounded-full"
-          style={{ backgroundColor: category.color }}
-        />
-        <span aria-hidden="true">{category.emoji}</span>
-        <span>{category.name}</span>
-        <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
-          ({catSites.length})
-        </span>
+      {/* 제목은 3D 씬 카드의 좌측 패널이 담당한다 (h3) — 여기서는 스크린리더용 라벨만 */}
+      <h2 className="sr-only">
+        {category.name} ({catSites.length}개 사이트)
       </h2>
       <CategoryOrbital category={category} sites={catSites} />
     </section>
