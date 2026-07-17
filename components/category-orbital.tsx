@@ -42,8 +42,9 @@ export default function CategoryOrbital({
     const el = sceneRef.current;
     if (!el) return;
     const update = () => {
+      // 노드(24) + 라벨 폭 여유를 뺀 값 — 카드의 overflow-hidden 에 라벨이 잘리지 않게
       const half = Math.min(el.clientWidth, el.clientHeight) / 2;
-      setRadius(Math.max(84, Math.min(170, half - 54)));
+      setRadius(Math.max(76, Math.min(170, half - 68)));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -96,8 +97,10 @@ export default function CategoryOrbital({
       <Spotlight fill={category.color} size={360} />
 
       <div className="relative flex flex-col md:flex-row">
-        {/* ── 좌측: 카테고리 정보 / 선택한 사이트 상세 ────────── */}
-        <div className="z-10 flex flex-1 flex-col justify-center p-6 sm:p-8">
+        {/* ── 좌측: 카테고리 정보 / 선택한 사이트 상세 ──────────
+            모바일(flex-col)에서는 flex-1 을 주지 않는다. 세로 방향에서 flex-1 은
+            flex-basis:0% 라 높이를 0 으로 무너뜨려 아래 씬과 겹친다. */}
+        <div className="z-10 flex flex-col justify-center p-6 sm:p-8 md:flex-1">
           {active ? (
             <>
               <Badge
@@ -169,7 +172,9 @@ export default function CategoryOrbital({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
-          className={`relative h-[460px] flex-1 touch-pan-y select-none ${
+          // 모바일: 명시적 높이 + shrink-0 (flex-1 은 높이를 무너뜨린다)
+          // 데스크톱(row): flex-1 로 남는 폭을 채운다
+          className={`relative h-[380px] w-full shrink-0 touch-pan-y select-none sm:h-[440px] md:h-[520px] md:w-auto md:flex-1 ${
             dragging ? "cursor-grabbing" : "cursor-grab"
           }`}
         >
@@ -262,7 +267,7 @@ export default function CategoryOrbital({
                   {/* 라벨 — 노드 박스 기준 아래 중앙 (레이아웃에 영향 없음) */}
                   <span
                     aria-hidden="true"
-                    className={`pointer-events-none absolute left-1/2 top-[52px] -translate-x-1/2 whitespace-nowrap text-xs font-bold tracking-wide transition-colors sm:text-sm ${
+                    className={`pointer-events-none absolute left-1/2 top-[52px] max-w-[112px] -translate-x-1/2 truncate text-center text-[11px] font-bold tracking-wide transition-colors sm:max-w-none sm:text-sm ${
                       isActive ? "text-foreground" : "text-foreground/80"
                     }`}
                   >
