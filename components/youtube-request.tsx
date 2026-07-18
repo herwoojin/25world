@@ -9,15 +9,17 @@ import { Button } from "@/components/ui/button";
 import { BOT_SERVER_URL } from "@/lib/firebase";
 import { useMyProfile, useEffectiveGroup } from "@/lib/membership";
 
-// 변환 진행 팝업의 단계별 멘트 — 실제 서버 처리 순서(깨우기 → 자막 → 글쓰기 → 메일)에 맞춤
+// 접수 팝업의 단계별 멘트 — 접수(회원 확인)는 수 초면 끝나고, 변환 결과는 메일로 도착한다
 const STAGES = [
   { at: 0, emoji: "🚀", title: "서버를 깨우는 중이에요", sub: "기지개를 켜고 있어요… 조금만요!" },
-  { at: 8, emoji: "🎧", title: "영상 자막을 모으고 있어요", sub: "영상 속 이야기를 꼼꼼히 듣는 중이에요" },
-  { at: 35, emoji: "✍️", title: "블로그 글로 다듬고 있어요", sub: "AI가 열심히 글솜씨를 발휘하고 있어요" },
-  { at: 70, emoji: "💌", title: "메일 보낼 준비를 하고 있어요", sub: "이제 얼마 남지 않았어요!" },
-  { at: 88, emoji: "⏳", title: "마지막 점검 중이에요", sub: "곧 메일함에서 만나요" },
+  { at: 30, emoji: "📮", title: "변환을 접수하고 있어요", sub: "요청서를 예쁘게 접는 중이에요" },
+  { at: 70, emoji: "🔍", title: "회원 확인 중이에요", sub: "이제 얼마 남지 않았어요!" },
 ];
-const DONE_STAGE = { emoji: "🎉", title: "완료됐어요!", sub: "메일함을 확인해 보세요 💌" };
+const DONE_STAGE = {
+  emoji: "📨",
+  title: "접수 완료!",
+  sub: "변환이 끝나면 메일로 보내드려요 — 탭을 닫아도 괜찮아요 ☕",
+};
 
 export default function YoutubeRequest() {
   const profile = useMyProfile();
@@ -35,15 +37,15 @@ export default function YoutubeRequest() {
     if (profile?.email && !email) setEmail(profile.email);
   }, [profile?.email]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 진행률 애니메이션 — 평균 소요시간(~90초)에 맞춘 완만한 곡선, 응답 전에는 95%에서 대기
+  // 진행률 애니메이션 — 접수는 보통 수 초(서버 슬립 시 ~30초), 응답 전에는 95%에서 대기
   useEffect(() => {
     if (!busy) return;
     const t0 = Date.now();
     setProgress(0);
     const id = setInterval(() => {
       const sec = (Date.now() - t0) / 1000;
-      setProgress((p) => (p >= 100 ? p : Math.min(95, 95 * (1 - Math.exp(-sec / 45)))));
-    }, 300);
+      setProgress((p) => (p >= 100 ? p : Math.min(95, 95 * (1 - Math.exp(-sec / 8)))));
+    }, 200);
     return () => clearInterval(id);
   }, [busy]);
 
@@ -84,9 +86,9 @@ export default function YoutubeRequest() {
       });
       const data = await r.json().catch(() => ({ ok: false, message: "응답을 읽지 못했어요." }));
       if (data.ok) {
-        // 100% + 🎉 를 잠깐 보여준 뒤 팝업을 닫는다
+        // 100% + 📨 접수 완료를 잠깐 보여준 뒤 팝업을 닫는다
         setProgress(100);
-        await new Promise((res) => setTimeout(res, 1800));
+        await new Promise((res) => setTimeout(res, 2500));
       }
       setMsg({ ok: !!data.ok, text: data.message || (data.ok ? "완료" : "실패") });
       if (data.ok) setUrl("");
@@ -169,7 +171,7 @@ export default function YoutubeRequest() {
             </div>
             <p className="mt-2 text-xs font-bold text-violet-500">{Math.round(progress)}%</p>
             <p className="mt-4 text-[11px] text-zinc-400 dark:text-zinc-500">
-              영상 길이에 따라 30초~2분 정도 걸려요 ☕
+              변환은 보통 1~5분 — 완료되면 메일함으로 찾아가요 💌
             </p>
           </div>
         </div>
