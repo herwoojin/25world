@@ -5,6 +5,7 @@
 // 좋아요: Firestore likes 컬렉션 — 문서 id `{postId}_{uid}` 로 1인 1하트 보장
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
   Download,
   ExternalLink,
   Heart,
@@ -91,6 +92,22 @@ async function webappPost(payload: object) {
 
 export default function BlogSection() {
   const [posts, setPosts] = useState<BlogPost[] | null>(null);
+  // 섹션 접기 — 제목만 남기고 숨기기 (localStorage 에 기억)
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("25world:blog-collapsed") === "1");
+    } catch {}
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("25world:blog-collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
   const [error, setError] = useState("");
   const [uid, setUid] = useState<string | null>(null);
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
@@ -379,7 +396,23 @@ export default function BlogSection() {
         <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
           ({posts?.length ?? "…"})
         </span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-controls="blog-content"
+          className="ml-1 flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 transition-transform ${collapsed ? "" : "rotate-180"}`}
+          />
+          {collapsed ? "펼치기" : "숨기기"}
+        </button>
       </h2>
+
+      {!collapsed && (
+        <div id="blog-content">
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
         텔레그램 봇에게 &quot;글 저장 + 내용&quot;이나 .html 파일을 보내면 이
         목록에 쌓입니다. 제목을 클릭하면 새 창에서 열립니다.
@@ -710,6 +743,8 @@ export default function BlogSection() {
           );
         })}
       </div>
+        </div>
+      )}
     </section>
   );
 }
