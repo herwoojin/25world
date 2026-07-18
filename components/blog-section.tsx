@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
+import YoutubeRequest from "@/components/youtube-request";
 import ActionMenu from "@/components/action-menu";
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
@@ -383,6 +384,9 @@ export default function BlogSection() {
         텔레그램 봇에게 &quot;글 저장 + 내용&quot;이나 .html 파일을 보내면 이
         목록에 쌓입니다. 제목을 클릭하면 새 창에서 열립니다.
       </p>
+
+      {/* 유료회원 전용 — 유튜브 URL → 블로그 HTML 이메일 변환 */}
+      <YoutubeRequest />
 
       {adminKey && (
         <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">
