@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { BOT_SERVER_URL } from "@/lib/firebase";
 import { useMyProfile, useEffectiveGroup } from "@/lib/membership";
 
+// 변환 진행 팝업의 단계별 멘트 — 실제 서버 처리 순서(깨우기 → 자막 → 글쓰기 → 메일)에 맞춤
+const STAGES = [
+  { at: 0, emoji: "🚀", title: "서버를 깨우는 중이에요", sub: "기지개를 켜고 있어요… 조금만요!" },
+  { at: 8, emoji: "🎧", title: "영상 자막을 모으고 있어요", sub: "영상 속 이야기를 꼼꼼히 듣는 중이에요" },
+  { at: 35, emoji: "✍️", title: "블로그 글로 다듬고 있어요", sub: "AI가 열심히 글솜씨를 발휘하고 있어요" },
+  { at: 70, emoji: "💌", title: "메일 보낼 준비를 하고 있어요", sub: "이제 얼마 남지 않았어요!" },
+  { at: 88, emoji: "⏳", title: "마지막 점검 중이에요", sub: "곧 메일함에서 만나요" },
+];
+const DONE_STAGE = { emoji: "🎉", title: "완료됐어요!", sub: "메일함을 확인해 보세요 💌" };
+
 export default function YoutubeRequest() {
   const profile = useMyProfile();
   const group = useEffectiveGroup();
@@ -18,11 +28,24 @@ export default function YoutubeRequest() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [progress, setProgress] = useState(0);
 
   // 로그인 이메일을 기본값으로
   useEffect(() => {
     if (profile?.email && !email) setEmail(profile.email);
   }, [profile?.email]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 진행률 애니메이션 — 평균 소요시간(~90초)에 맞춘 완만한 곡선, 응답 전에는 95%에서 대기
+  useEffect(() => {
+    if (!busy) return;
+    const t0 = Date.now();
+    setProgress(0);
+    const id = setInterval(() => {
+      const sec = (Date.now() - t0) / 1000;
+      setProgress((p) => (p >= 100 ? p : Math.min(95, 95 * (1 - Math.exp(-sec / 45)))));
+    }, 300);
+    return () => clearInterval(id);
+  }, [busy]);
 
   if (!paid) {
     return (
@@ -50,7 +73,7 @@ export default function YoutubeRequest() {
       return;
     }
     setBusy(true);
-    setMsg({ ok: true, text: "변환 중입니다… (영상 길이에 따라 30초~2분 걸릴 수 있어요)" });
+    setMsg(null);
     try {
       // Render 무료 플랜이 잠들어 있을 수 있어 먼저 깨운다
       await fetch(`${BOT_SERVER_URL}/api/wake`).catch(() => {});
@@ -60,6 +83,11 @@ export default function YoutubeRequest() {
         body: JSON.stringify({ youtubeUrl: u, email: e }),
       });
       const data = await r.json().catch(() => ({ ok: false, message: "응답을 읽지 못했어요." }));
+      if (data.ok) {
+        // 100% + 🎉 를 잠깐 보여준 뒤 팝업을 닫는다
+        setProgress(100);
+        await new Promise((res) => setTimeout(res, 1800));
+      }
       setMsg({ ok: !!data.ok, text: data.message || (data.ok ? "완료" : "실패") });
       if (data.ok) setUrl("");
     } catch {
@@ -68,6 +96,9 @@ export default function YoutubeRequest() {
       setBusy(false);
     }
   };
+
+  const stage =
+    progress >= 100 ? DONE_STAGE : [...STAGES].reverse().find((s) => progress >= s.at) ?? STAGES[0];
 
   const inputCls =
     "w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700";
@@ -112,6 +143,36 @@ export default function YoutubeRequest() {
         >
           {msg.text}
         </p>
+      )}
+
+      {/* 변환 진행 팝업 — 단계별 귀여운 멘트 + 진행률 */}
+      {busy && (
+        <div
+          role="dialog"
+          aria-label="변환 진행 상황"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-violet-400/30 bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+            <div className={`text-5xl ${progress >= 100 ? "animate-none" : "animate-bounce"}`}>
+              {stage.emoji}
+            </div>
+            <p className="mt-3 text-base font-bold text-zinc-900 dark:text-zinc-50">
+              {stage.title}
+            </p>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{stage.sub}</p>
+            <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-bold text-violet-500">{Math.round(progress)}%</p>
+            <p className="mt-4 text-[11px] text-zinc-400 dark:text-zinc-500">
+              영상 길이에 따라 30초~2분 정도 걸려요 ☕
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
