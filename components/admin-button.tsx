@@ -15,6 +15,17 @@ export function getAdminKey(): string {
   }
 }
 
+/** 관리자 모드 강제 해제 — 로그아웃/계정 전환 시 호출한다 */
+export function clearAdminKey(): void {
+  try {
+    if (!sessionStorage.getItem("25world:adminKey")) return;
+    sessionStorage.removeItem("25world:adminKey");
+  } catch {
+    return;
+  }
+  window.dispatchEvent(new Event(ADMIN_EVENT));
+}
+
 /** 관리자 모드 on/off 를 구독하는 훅 */
 export function useAdminOn(): boolean {
   const [on, setOn] = useState(false);
@@ -32,7 +43,11 @@ export default function AdminButton() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setOn(Boolean(getAdminKey()));
+    const sync = () => setOn(Boolean(getAdminKey()));
+    sync();
+    // 외부에서 해제될 때(로그아웃/계정전환)도 버튼 상태를 동기화
+    window.addEventListener(ADMIN_EVENT, sync);
+    return () => window.removeEventListener(ADMIN_EVENT, sync);
   }, []);
 
   const toggle = async () => {

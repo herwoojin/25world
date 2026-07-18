@@ -3,7 +3,7 @@
 // 첫 화면 구글 로그인 게이트 — 로그인 후에만 포털이 보인다.
 // 디자인 레퍼런스: hero-02 (GradientWave 배경 + 대형 타이포 + 아이콘 스택 + 마퀴)
 // 외부 CDN 로고/이미지 대신 25world 자체 사이트 아이콘을 사용한다.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -12,6 +12,7 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { upsertUserProfile } from "@/lib/membership";
+import { clearAdminKey } from "@/components/admin-button";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, SITES, getCategoryColor } from "@/lib/sites";
@@ -57,9 +58,18 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  // 직전 로그인 uid — 계정이 바뀌거나 로그아웃하면 관리자 모드를 강제 해제한다
+  const lastUid = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(getFirebaseAuth(), (user) => {
+      const uid = user?.uid ?? null;
+      // 최초 콜백(undefined)은 기록만. 이후 uid 가 달라지면(전환/로그아웃) 관리자 해제.
+      if (lastUid.current !== undefined && lastUid.current !== uid) {
+        clearAdminKey();
+      }
+      lastUid.current = uid;
+
       setStatus(user ? "in" : "out");
       setEmail(user?.email ?? "");
       // 로그인 사용자를 회원 명부(users/{uid})에 등록/갱신 — 등급 관리의 기반
