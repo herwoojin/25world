@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  DollarSign,
   Pencil,
   Plus,
   Save,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { CATEGORIES } from "@/lib/sites";
 import { useCategories, useSites, webappPost } from "@/lib/use-sites";
+import { DEFAULT_PAID_SITE_IDS } from "@/lib/membership";
 import { saveSiteConfig, useSiteConfig, type SiteConfig } from "@/lib/site-config";
 
 function makeSiteId(url: string, taken: Set<string>) {
@@ -85,6 +87,15 @@ export default function SiteAdmin() {
     if (i < 0 || j < 0 || j >= current.length) return;
     [current[i], current[j]] = [current[j], current[i]];
     persist({ ...draft, order: { ...draft.order, [catId]: current } });
+  };
+
+  /** 유료 전용 사이트 토글 — 유료회원 이상만 볼 수 있게 */
+  const paidSet = new Set(draft.paid ?? DEFAULT_PAID_SITE_IDS);
+  const togglePaid = (siteId: string) => {
+    const next = new Set(draft.paid ?? DEFAULT_PAID_SITE_IDS);
+    if (next.has(siteId)) next.delete(siteId);
+    else next.add(siteId);
+    persist({ ...draft, paid: Array.from(next) });
   };
 
   /** 사이트를 다른 카테고리로 이동 */
@@ -331,6 +342,23 @@ export default function SiteAdmin() {
                         </option>
                       ))}
                     </select>
+
+                    {/* 유료 전용 토글 — 켜지면 유료회원 이상만 이 사이트를 본다 */}
+                    <button
+                      type="button"
+                      onClick={() => togglePaid(s.id)}
+                      disabled={busy}
+                      aria-pressed={paidSet.has(s.id)}
+                      aria-label={`${s.name} 유료 전용 ${paidSet.has(s.id) ? "해제" : "지정"}`}
+                      title={paidSet.has(s.id) ? "유료 전용 (클릭 시 해제)" : "무료 (클릭 시 유료 전용)"}
+                      className={`rounded p-1 transition-colors disabled:opacity-40 ${
+                        paidSet.has(s.id)
+                          ? "text-emerald-500"
+                          : "text-zinc-400 hover:text-foreground"
+                      }`}
+                    >
+                      <DollarSign className="h-4 w-4" aria-hidden="true" />
+                    </button>
 
                     {dynamic.some((d) => d.id === s.id) && (
                       <>

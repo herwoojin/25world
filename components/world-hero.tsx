@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import IconMarquee from "@/components/icon-marquee";
 import { SpotlightReveal } from "@/components/ui/image-reveal";
 import { CATEGORIES } from "@/lib/sites";
-import { useSites } from "@/lib/use-sites";
+import { useVisibleSites } from "@/lib/membership";
 
 export default function WorldHero() {
-  const { sites } = useSites();
+  const { sites } = useVisibleSites();
   // ERD §4.3: 짝/홀 인덱스 자동 분할 — 사이트 추가 시 두 줄에 균등 분배
   const row1 = sites.filter((_, i) => i % 2 === 0);
   const row2 = sites.filter((_, i) => i % 2 === 1);

@@ -4,7 +4,8 @@
 // 데스크톱(md+): 인라인 드롭다운 / 모바일: 햄버거 → 아코디언 패널
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
-import { useCategories, useSites } from "@/lib/use-sites";
+import { useCategories } from "@/lib/use-sites";
+import { useVisibleSites } from "@/lib/membership";
 
 const BLOG_LABEL = "유튜브, 글로 다시 읽어보자";
 
@@ -13,7 +14,7 @@ export default function HeaderNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCat, setMobileCat] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const { sites: allSites } = useSites();
+  const { sites: allSites } = useVisibleSites();
   const CATEGORIES = useCategories();
 
   // 바깥 클릭 시 닫기.
@@ -85,9 +86,6 @@ export default function HeaderNav() {
                       className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
                     >
                       <span className="block text-sm font-bold">{site.name}</span>
-                      <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                        {site.url}
-                      </span>
                     </a>
                   ))}
                   <a
@@ -167,9 +165,6 @@ export default function HeaderNav() {
                       >
                         <span className="block text-sm font-semibold">
                           {site.name}
-                        </span>
-                        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                          {site.url}
                         </span>
                       </a>
                     ))}

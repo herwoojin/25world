@@ -11,6 +11,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { upsertUserProfile } from "@/lib/membership";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, SITES, getCategoryColor } from "@/lib/sites";
@@ -61,6 +62,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(getFirebaseAuth(), (user) => {
       setStatus(user ? "in" : "out");
       setEmail(user?.email ?? "");
+      // 로그인 사용자를 회원 명부(users/{uid})에 등록/갱신 — 등급 관리의 기반
+      if (user) upsertUserProfile(user).catch(() => {});
     });
     return unsub;
   }, []);

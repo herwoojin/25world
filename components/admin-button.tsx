@@ -15,6 +15,18 @@ export function getAdminKey(): string {
   }
 }
 
+/** 관리자 모드 on/off 를 구독하는 훅 */
+export function useAdminOn(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(Boolean(getAdminKey()));
+    sync();
+    window.addEventListener(ADMIN_EVENT, sync);
+    return () => window.removeEventListener(ADMIN_EVENT, sync);
+  }, []);
+  return on;
+}
+
 export default function AdminButton() {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,14 +74,22 @@ export default function AdminButton() {
     }
   };
 
+  // 우측 하단 고정 동그란 버튼 — 관리자 로그인 / 해제 토글
   return (
     <button
       type="button"
       onClick={toggle}
       disabled={busy}
-      className="rounded px-2 py-1 text-xs text-zinc-500 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:text-zinc-400"
+      aria-label={on ? "관리자 모드 해제" : "관리자 로그인"}
+      title={on ? "관리자 모드 해제" : "관리자 로그인 (admin / 2525)"}
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+      className={`fixed right-3 z-50 flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-lg ring-1 backdrop-blur transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+        on
+          ? "bg-amber-400 text-black ring-amber-300 hover:bg-amber-300"
+          : "bg-background/80 text-zinc-500 ring-zinc-300 hover:text-foreground dark:ring-zinc-700"
+      }`}
     >
-      {busy ? "확인 중…" : on ? "🔓 관리자 해제" : "🔐 관리자"}
+      {busy ? "…" : on ? "🔓" : "🔐"}
     </button>
   );
 }

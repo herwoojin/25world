@@ -13,6 +13,8 @@ export interface SiteConfig {
   cats: Record<string, { name?: string; emoji?: string }>;
   catOf: Record<string, string>;
   order: Record<string, string[]>;
+  /** 유료회원 전용 사이트 id 목록 (없으면 membership.ts 의 기본값 사용) */
+  paid?: string[];
 }
 
 const EMPTY: SiteConfig = { cats: {}, catOf: {}, order: {} };
@@ -30,6 +32,7 @@ export function loadSiteConfig(force = false): Promise<SiteConfig> {
         cats: d.cats ?? {},
         catOf: d.catOf ?? {},
         order: d.order ?? {},
+        paid: Array.isArray(d.paid) ? d.paid : undefined,
       } as SiteConfig;
     })
     .catch(() => EMPTY);
