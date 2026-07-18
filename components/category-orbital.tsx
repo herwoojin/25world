@@ -20,6 +20,8 @@ import type { Category, Site } from "@/lib/sites";
 interface CategoryOrbitalProps {
   category: Category;
   sites: Site[];
+  /** 현재 등급에서 이 사이트가 잠겨 있는가 (유료 전용인데 등급 부족) */
+  locked?: (siteId: string) => boolean;
 }
 
 const NODE = 48; // 노드 지름(px) — left/top 오프셋 계산에 사용
@@ -28,7 +30,9 @@ const DEG = Math.PI / 180;
 export default function CategoryOrbital({
   category,
   sites,
+  locked,
 }: CategoryOrbitalProps) {
+  const isLocked = (id: string) => (locked ? locked(id) : false);
   const [angle, setAngle] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -217,6 +221,7 @@ export default function CategoryOrbital({
               const x = radius * Math.cos(a);
               const y = radius * Math.sin(a);
               const isActive = activeId === site.id;
+              const lockedNode = isLocked(site.id);
               // 아래쪽(앞)일수록 밝고 크게 — 원은 유지한 채 입체감만 준다
               const front = (1 + Math.sin(a)) / 2; // 0(뒤) ~ 1(앞)
               const scale = isActive ? 1.25 : 0.86 + 0.14 * front;
@@ -238,16 +243,25 @@ export default function CategoryOrbital({
                   <button
                     type="button"
                     aria-expanded={isActive}
-                    aria-label={`${site.name} — ${site.desc}`}
+                    aria-disabled={lockedNode}
+                    aria-label={
+                      lockedNode
+                        ? `${site.name} — 유료회원 전용`
+                        : `${site.name} — ${site.desc}`
+                    }
                     onClick={() => {
                       if (moved.current) return; // 드래그 직후의 클릭은 무시
+                      if (lockedNode) return; // 잠금: 일반회원은 클릭 불가
                       setActiveId(isActive ? null : site.id);
                     }}
-                    className="flex h-full w-full items-center justify-center rounded-full border-2 bg-white shadow-md transition-transform duration-300 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none dark:bg-zinc-200"
+                    className={`flex h-full w-full items-center justify-center rounded-full border-2 bg-white shadow-md transition-transform duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none dark:bg-zinc-200 ${
+                      lockedNode ? "cursor-not-allowed" : "hover:scale-110"
+                    }`}
                     style={{
                       color: category.color,
                       borderColor: isActive ? category.color : `${category.color}66`,
                       transform: `scale(${scale})`,
+                      opacity: lockedNode ? 0.55 : undefined,
                       boxShadow: isActive ? `0 0 28px -4px ${category.color}` : undefined,
                     }}
                   >
@@ -267,11 +281,16 @@ export default function CategoryOrbital({
                   {/* 라벨 — 노드 박스 기준 아래 중앙 (레이아웃에 영향 없음) */}
                   <span
                     aria-hidden="true"
-                    className={`pointer-events-none absolute left-1/2 top-[52px] max-w-[112px] -translate-x-1/2 truncate text-center text-[11px] font-bold tracking-wide transition-colors sm:max-w-none sm:text-sm ${
+                    className={`pointer-events-none absolute left-1/2 top-[52px] flex max-w-[124px] -translate-x-1/2 items-center justify-center gap-1 whitespace-nowrap text-[11px] font-bold tracking-wide transition-colors sm:max-w-none sm:text-sm ${
                       isActive ? "text-foreground" : "text-foreground/80"
                     }`}
                   >
-                    {site.name}
+                    <span className="truncate">{site.name}</span>
+                    {lockedNode && (
+                      <span className="shrink-0 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-extrabold leading-none text-black">
+                        VIP
+                      </span>
+                    )}
                   </span>
                 </div>
               );

@@ -4,7 +4,7 @@
 //   · 등급은 Firestore users/{uid}.group 에 저장 (기본 general)
 //   · 유료 전용 사이트는 등급이 유료회원 이상일 때만 보인다
 //   · 정적 사이트라 이 게이팅은 UX 수준(브라우저)에서 동작한다 — 하드 보안이 아님
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -127,18 +127,25 @@ export function useEffectiveGroup(): Group {
   return profile?.group ?? "general";
 }
 
-/** 현재 등급에서 볼 수 있는 사이트만 필터링해서 돌려준다 */
-export function useVisibleSites(): { sites: Site[]; dynamic: Site[] } {
+/** 사이트 게이트 — 모든 사이트를 그대로 돌려주되, 각 사이트가 현재 등급에서
+ *  잠겨 있는지(locked) 알려준다. 잠긴 사이트는 이름은 보이되 클릭 불가 + VIP 배지. */
+export function useSiteGate(): {
+  sites: Site[];
+  dynamic: Site[];
+  locked: (siteId: string) => boolean;
+} {
   const { sites, dynamic } = useSites();
   const cfg = useSiteConfig();
   const group = useEffectiveGroup();
-  return useMemo(() => {
-    const paidIds = new Set(cfg.paid ?? DEFAULT_PAID_SITE_IDS);
-    return {
-      sites: sites.filter((s) => canSeeSite(s.id, group, paidIds)),
-      dynamic,
-    };
-  }, [sites, dynamic, cfg.paid, group]);
+  const paidIds = useMemo(
+    () => new Set(cfg.paid ?? DEFAULT_PAID_SITE_IDS),
+    [cfg.paid]
+  );
+  const locked = useCallback(
+    (siteId: string) => paidIds.has(siteId) && !canSeeSite(siteId, group, paidIds),
+    [paidIds, group]
+  );
+  return { sites, dynamic, locked };
 }
 
 // ── 관리자용 회원 관리 ────────────────────────────────────

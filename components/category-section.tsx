@@ -3,17 +3,16 @@
 import type { CSSProperties } from "react";
 import CategoryOrbital from "@/components/category-orbital";
 import type { Category } from "@/lib/sites";
-import { useVisibleSites } from "@/lib/membership";
+import { useSiteGate } from "@/lib/membership";
 
 interface CategorySectionProps {
   category: Category;
 }
 
 export default function CategorySection({ category }: CategorySectionProps) {
-  const { sites } = useVisibleSites();
+  const { sites, locked } = useSiteGate();
   const catSites = sites.filter((s) => s.cat === category.id);
 
-  // 현재 등급에서 볼 사이트가 없으면 섹션 자체를 숨긴다
   if (catSites.length === 0) return null;
 
   return (
@@ -28,7 +27,7 @@ export default function CategorySection({ category }: CategorySectionProps) {
       <h2 className="sr-only">
         {category.name} ({catSites.length}개 사이트)
       </h2>
-      <CategoryOrbital category={category} sites={catSites} />
+      <CategoryOrbital category={category} sites={catSites} locked={locked} />
     </section>
   );
 }

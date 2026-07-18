@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { useCategories } from "@/lib/use-sites";
-import { useVisibleSites } from "@/lib/membership";
+import { useSiteGate } from "@/lib/membership";
 
 const BLOG_LABEL = "유튜브, 글로 다시 읽어보자";
 
@@ -14,7 +14,7 @@ export default function HeaderNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCat, setMobileCat] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const { sites: allSites } = useVisibleSites();
+  const { sites: allSites, locked } = useSiteGate();
   const CATEGORIES = useCategories();
 
   // 바깥 클릭 시 닫기.
@@ -76,18 +76,32 @@ export default function HeaderNav() {
               </button>
               {isOpen && (
                 <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-zinc-200 bg-background p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                  {sites.map((site) => (
-                    <a
-                      key={site.id}
-                      href={site.url}
-                      target="_blank"
-                      rel="noopener"
-                      onClick={closeAll}
-                      className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
-                    >
-                      <span className="block text-sm font-bold">{site.name}</span>
-                    </a>
-                  ))}
+                  {sites.map((site) =>
+                    locked(site.id) ? (
+                      <span
+                        key={site.id}
+                        aria-disabled="true"
+                        title="유료회원 전용"
+                        className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 opacity-60"
+                      >
+                        <span className="text-sm font-bold">{site.name}</span>
+                        <span className="ml-2 shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
+                          VIP
+                        </span>
+                      </span>
+                    ) : (
+                      <a
+                        key={site.id}
+                        href={site.url}
+                        target="_blank"
+                        rel="noopener"
+                        onClick={closeAll}
+                        className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
+                      >
+                        <span className="block text-sm font-bold">{site.name}</span>
+                      </a>
+                    )
+                  )}
                   <a
                     href={`#cat-${cat.id}`}
                     onClick={closeAll}
@@ -154,20 +168,33 @@ export default function HeaderNav() {
                 </button>
                 {isOpen && (
                   <div className="mb-1 ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-800">
-                    {sites.map((site) => (
-                      <a
-                        key={site.id}
-                        href={site.url}
-                        target="_blank"
-                        rel="noopener"
-                        onClick={closeAll}
-                        className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
-                      >
-                        <span className="block text-sm font-semibold">
-                          {site.name}
+                    {sites.map((site) =>
+                      locked(site.id) ? (
+                        <span
+                          key={site.id}
+                          aria-disabled="true"
+                          className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 opacity-60"
+                        >
+                          <span className="text-sm font-semibold">{site.name}</span>
+                          <span className="ml-2 shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
+                            VIP
+                          </span>
                         </span>
-                      </a>
-                    ))}
+                      ) : (
+                        <a
+                          key={site.id}
+                          href={site.url}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={closeAll}
+                          className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
+                        >
+                          <span className="block text-sm font-semibold">
+                            {site.name}
+                          </span>
+                        </a>
+                      )
+                    )}
                   </div>
                 )}
               </div>
