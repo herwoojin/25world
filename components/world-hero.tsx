@@ -7,7 +7,7 @@ import { CATEGORIES } from "@/lib/sites";
 import { useSiteGate } from "@/lib/membership";
 
 export default function WorldHero() {
-  const { sites, locked } = useSiteGate();
+  const { sites, locked, paidOnly } = useSiteGate();
   // ERD §4.3: 짝/홀 인덱스 자동 분할 — 사이트 추가 시 두 줄에 균등 분배
   const row1 = sites.filter((_, i) => i % 2 === 0);
   const row2 = sites.filter((_, i) => i % 2 === 1);
@@ -42,8 +42,8 @@ export default function WorldHero() {
         blur={3}
       >
         <div className="space-y-5 sm:space-y-6">
-          <IconMarquee sites={row1} direction="left" locked={locked} />
-          <IconMarquee sites={row2} direction="right" locked={locked} />
+          <IconMarquee sites={row1} direction="left" locked={locked} paidOnly={paidOnly} />
+          <IconMarquee sites={row2} direction="right" locked={locked} paidOnly={paidOnly} />
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-0 left-0 !mt-0 w-24 bg-gradient-to-r from-background to-transparent"

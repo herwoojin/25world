@@ -6,8 +6,10 @@ interface IconMarqueeProps {
   sites: Site[];
   direction: "left" | "right";
   durationSec?: number;
-  /** 유료 전용인데 등급 부족이면 잠금 (클릭 불가 + VIP 배지) */
+  /** 유료 전용인데 등급 부족이면 잠금 (클릭 불가 + 흐림) */
   locked?: (siteId: string) => boolean;
+  /** 유료 전용 사이트 — 등급과 무관하게 VIP 배지 표시 */
+  paidOnly?: (siteId: string) => boolean;
 }
 
 /** 이음새 제거용 반복 횟수 — translateX(±50%) 루프이므로 짝수(2배 구조) 유지 */
@@ -18,6 +20,7 @@ export default function IconMarquee({
   direction,
   durationSec = 30,
   locked,
+  paidOnly,
 }: IconMarqueeProps) {
   return (
     // 가로 클리핑은 히어로 섹션(overflow-hidden)이 담당 — 여기서 자르면 칩 툴팁이 잘린다
@@ -42,6 +45,7 @@ export default function IconMarquee({
                 site={site}
                 decorative={r > 0}
                 locked={locked ? locked(site.id) : false}
+                paidOnly={paidOnly ? paidOnly(site.id) : false}
               />
             ))}
           </div>

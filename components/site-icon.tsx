@@ -4,14 +4,17 @@ interface SiteIconProps {
   site: Site;
   /** 캐러셀 반복 렌더분 — 포커스/스크린리더에서 제외 */
   decorative?: boolean;
-  /** 유료 전용인데 등급 부족 — 클릭 불가 + VIP 배지 */
+  /** 유료 전용인데 등급 부족 — 클릭 불가 + 흐림 */
   locked?: boolean;
+  /** 유료 전용 사이트 — 등급과 무관하게 VIP 배지 표시 */
+  paidOnly?: boolean;
 }
 
 export default function SiteIcon({
   site,
   decorative = false,
   locked = false,
+  paidOnly = false,
 }: SiteIconProps) {
   const color = getCategoryColor(site.cat);
   const chipCls =
@@ -35,7 +38,7 @@ export default function SiteIcon({
       {...(linkProps as Record<string, unknown>)}
       className={`${chipCls}${locked ? " cursor-not-allowed" : ""}`}
     >
-      {locked && (
+      {paidOnly && (
         <span className="absolute -right-1 -top-1 z-10 rounded bg-amber-400 px-1 py-0.5 text-[8px] font-extrabold leading-none text-black shadow">
           VIP
         </span>

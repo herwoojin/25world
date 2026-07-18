@@ -22,6 +22,8 @@ interface CategoryOrbitalProps {
   sites: Site[];
   /** 현재 등급에서 이 사이트가 잠겨 있는가 (유료 전용인데 등급 부족) */
   locked?: (siteId: string) => boolean;
+  /** 유료 전용 사이트인가 — 등급과 무관하게 VIP 배지를 표시 */
+  paidOnly?: (siteId: string) => boolean;
 }
 
 const NODE = 48; // 노드 지름(px) — left/top 오프셋 계산에 사용
@@ -31,8 +33,10 @@ export default function CategoryOrbital({
   category,
   sites,
   locked,
+  paidOnly,
 }: CategoryOrbitalProps) {
   const isLocked = (id: string) => (locked ? locked(id) : false);
+  const isPaidOnly = (id: string) => (paidOnly ? paidOnly(id) : false);
   const [angle, setAngle] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -113,8 +117,13 @@ export default function CategoryOrbital({
               >
                 {category.emoji} {category.name}
               </Badge>
-              <h3 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+              <h3 className="mt-3 flex items-center gap-2 text-3xl font-bold tracking-tight md:text-4xl">
                 {active.name}
+                {isPaidOnly(active.id) && (
+                  <span className="rounded bg-amber-400 px-1.5 py-0.5 text-xs font-extrabold leading-none text-black">
+                    VIP
+                  </span>
+                )}
               </h3>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
                 {active.desc}
@@ -286,7 +295,7 @@ export default function CategoryOrbital({
                     }`}
                   >
                     <span className="truncate">{site.name}</span>
-                    {lockedNode && (
+                    {isPaidOnly(site.id) && (
                       <span className="shrink-0 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-extrabold leading-none text-black">
                         VIP
                       </span>

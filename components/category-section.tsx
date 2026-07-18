@@ -10,7 +10,7 @@ interface CategorySectionProps {
 }
 
 export default function CategorySection({ category }: CategorySectionProps) {
-  const { sites, locked } = useSiteGate();
+  const { sites, locked, paidOnly } = useSiteGate();
   const catSites = sites.filter((s) => s.cat === category.id);
 
   if (catSites.length === 0) return null;
@@ -27,7 +27,12 @@ export default function CategorySection({ category }: CategorySectionProps) {
       <h2 className="sr-only">
         {category.name} ({catSites.length}개 사이트)
       </h2>
-      <CategoryOrbital category={category} sites={catSites} locked={locked} />
+      <CategoryOrbital
+        category={category}
+        sites={catSites}
+        locked={locked}
+        paidOnly={paidOnly}
+      />
     </section>
   );
 }

@@ -127,12 +127,14 @@ export function useEffectiveGroup(): Group {
   return profile?.group ?? "general";
 }
 
-/** 사이트 게이트 — 모든 사이트를 그대로 돌려주되, 각 사이트가 현재 등급에서
- *  잠겨 있는지(locked) 알려준다. 잠긴 사이트는 이름은 보이되 클릭 불가 + VIP 배지. */
+/** 사이트 게이트 — 모든 사이트를 그대로 돌려주되:
+ *  · paidOnly: 유료 전용 사이트인가 — 등급과 무관하게 VIP 배지를 모두에게 표시
+ *  · locked  : 현재 등급으로는 사용 불가 — 클릭 차단 + 흐림 (유료회원 이상이면 false) */
 export function useSiteGate(): {
   sites: Site[];
   dynamic: Site[];
   locked: (siteId: string) => boolean;
+  paidOnly: (siteId: string) => boolean;
 } {
   const { sites, dynamic } = useSites();
   const cfg = useSiteConfig();
@@ -145,7 +147,8 @@ export function useSiteGate(): {
     (siteId: string) => paidIds.has(siteId) && !canSeeSite(siteId, group, paidIds),
     [paidIds, group]
   );
-  return { sites, dynamic, locked };
+  const paidOnly = useCallback((siteId: string) => paidIds.has(siteId), [paidIds]);
+  return { sites, dynamic, locked, paidOnly };
 }
 
 // ── 관리자용 회원 관리 ────────────────────────────────────
