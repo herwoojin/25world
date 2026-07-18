@@ -14,7 +14,7 @@ export default function HeaderNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCat, setMobileCat] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const { sites: allSites, locked } = useSiteGate();
+  const { sites: allSites, locked, paidOnly } = useSiteGate();
   const CATEGORIES = useCategories();
 
   // 바깥 클릭 시 닫기.
@@ -96,9 +96,14 @@ export default function HeaderNav() {
                         target="_blank"
                         rel="noopener"
                         onClick={closeAll}
-                        className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
+                        className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
                       >
-                        <span className="block text-sm font-bold">{site.name}</span>
+                        <span className="text-sm font-bold">{site.name}</span>
+                        {paidOnly(site.id) && (
+                          <span className="ml-2 shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
+                            VIP
+                          </span>
+                        )}
                       </a>
                     )
                   )}
@@ -187,11 +192,16 @@ export default function HeaderNav() {
                           target="_blank"
                           rel="noopener"
                           onClick={closeAll}
-                          className="block rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
+                          className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-zinc-800"
                         >
-                          <span className="block text-sm font-semibold">
+                          <span className="text-sm font-semibold">
                             {site.name}
                           </span>
+                          {paidOnly(site.id) && (
+                            <span className="ml-2 shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
+                              VIP
+                            </span>
+                          )}
                         </a>
                       )
                     )}
