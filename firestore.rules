@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// 25WORLD Firestore 보안 규칙 (전체)
+// 정적 호스팅(Netlify) + 클라이언트 Firebase 구조라, 앱이 쓰는 모든 컬렉션은
+// 클라이언트에서 read/write 가 가능해야 한다. 하드 보안이 아닌 UX 수준 게이팅.
+// ── 새로 추가: stats (방문자 집계) ──────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 블로그 글 본문 (posts/{id})
+    match /posts/{postId} {
+      allow read, write: if true;
+    }
+
+    // 좋아요 (likes/{postId}_{uid})
+    match /likes/{likeId} {
+      allow read, write: if true;
+    }
+
+    // 즐겨찾기 (favorites/{postId}_{uid})
+    match /favorites/{favId} {
+      allow read, write: if true;
+    }
+
+    // 글 미리보기·카테고리 (previews/{postId})
+    match /previews/{postId} {
+      allow read, write: if true;
+    }
+
+    // 회원 프로필·등급 (users/{uid})
+    match /users/{uid} {
+      allow read, write: if true;
+    }
+
+    // 사이트 표시 설정·유료 지정 (siteMeta/config)
+    match /siteMeta/{docId} {
+      allow read, write: if true;
+    }
+
+    // 음성(TTS) 메타·조각·큐
+    match /audio/{key} {
+      allow read, write: if true;
+    }
+    match /audio_parts/{partId} {
+      allow read, write: if true;
+    }
+    match /ttsQueue/{jobId} {
+      allow read, write: if true;
+    }
+
+    // ★ 방문자 실시간 집계 (stats/visitors, stats/daily_{날짜})
+    match /stats/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
