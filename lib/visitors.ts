@@ -67,19 +67,27 @@ export function subscribeVisitorStats(
   const unsubs: Array<() => void> = [];
   try {
     unsubs.push(
-      onSnapshot(doc(db(), "stats", "visitors"), (snap) => {
-        total = (snap.data()?.total as number) ?? 0;
-        emit();
-      })
+      onSnapshot(
+        doc(db(), "stats", "visitors"),
+        (snap) => {
+          total = (snap.data()?.total as number) ?? 0;
+          emit();
+        },
+        () => emit() // 규칙 미게시 등 — 0 으로 표시 (로딩 "…" 에 멈추지 않게)
+      )
     );
     unsubs.push(
-      onSnapshot(doc(db(), "stats", `daily_${today}`), (snap) => {
-        todayCount = (snap.data()?.count as number) ?? 0;
-        emit();
-      })
+      onSnapshot(
+        doc(db(), "stats", `daily_${today}`),
+        (snap) => {
+          todayCount = (snap.data()?.count as number) ?? 0;
+          emit();
+        },
+        () => emit()
+      )
     );
   } catch {
-    // 무시
+    emit();
   }
   return () => unsubs.forEach((u) => u());
 }
