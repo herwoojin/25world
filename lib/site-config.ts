@@ -1,13 +1,21 @@
 "use client";
 
 // 사이트 표시 설정 — 관리자 모드에서 바꾼 내용을 Firestore 단일 문서에 보관한다.
-//  · cats  : 카테고리 제목/이모지 덮어쓰기
-//  · catOf : 사이트를 다른 카테고리로 이동
-//  · order : 카테고리별 사이트 정렬 순서
+//  · cats   : 카테고리 제목/이모지 덮어쓰기
+//  · catOf  : 사이트를 다른 카테고리로 이동
+//  · order  : 카테고리별 사이트 정렬 순서
+//  · edits  : 코드 내장 사이트(lib/sites.ts)의 이름·설명·URL 덮어쓰기
+//  · hidden : 숨긴(삭제한) 코드 내장 사이트 id — 소스는 그대로 두고 화면에서만 뺀다
 import { useEffect, useState } from "react";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 import { getFirebaseApp } from "@/lib/firebase";
 import { CATEGORIES, type Category, type CategoryId, type Site } from "@/lib/sites";
+
+export interface SiteEdit {
+  name?: string;
+  desc?: string;
+  url?: string;
+}
 
 export interface SiteConfig {
   cats: Record<string, { name?: string; emoji?: string }>;
@@ -15,6 +23,10 @@ export interface SiteConfig {
   order: Record<string, string[]>;
   /** 유료회원 전용 사이트 id 목록 (없으면 membership.ts 의 기본값 사용) */
   paid?: string[];
+  /** 코드 내장 사이트 덮어쓰기 (id → 바꾼 값) */
+  edits?: Record<string, SiteEdit>;
+  /** 화면에서 숨긴 사이트 id 목록 */
+  hidden?: string[];
 }
 
 const EMPTY: SiteConfig = { cats: {}, catOf: {}, order: {} };
@@ -33,6 +45,8 @@ export function loadSiteConfig(force = false): Promise<SiteConfig> {
         catOf: d.catOf ?? {},
         order: d.order ?? {},
         paid: Array.isArray(d.paid) ? d.paid : undefined,
+        edits: d.edits ?? {},
+        hidden: Array.isArray(d.hidden) ? d.hidden : [],
       } as SiteConfig;
     })
     .catch(() => EMPTY);
@@ -71,14 +85,27 @@ export function applyCategories(cfg: SiteConfig): Category[] {
   }));
 }
 
-/** 사이트 목록에 카테고리 이동 + 정렬 순서를 반영 */
+/** 사이트 목록에 관리자 수정(이름·설명·URL·숨김) + 카테고리 이동 + 정렬 순서를 반영 */
 export function applySites(sites: Site[], cfg: SiteConfig): Site[] {
-  const moved = sites.map((s) => {
-    const to = cfg.catOf[s.id];
-    return to && CATEGORIES.some((c) => c.id === to)
-      ? { ...s, cat: to as CategoryId }
-      : s;
-  });
+  const hidden = new Set(cfg.hidden ?? []);
+  const moved = sites
+    .filter((s) => !hidden.has(s.id))
+    .map((s) => {
+      // 이름·설명·URL 덮어쓰기 (빈 값은 원본 유지)
+      const e = cfg.edits?.[s.id];
+      const edited: Site = e
+        ? {
+            ...s,
+            name: e.name?.trim() || s.name,
+            desc: e.desc?.trim() ?? s.desc,
+            url: (e.url?.trim() as Site["url"]) || s.url,
+          }
+        : s;
+      const to = cfg.catOf[s.id];
+      return to && CATEGORIES.some((c) => c.id === to)
+        ? { ...edited, cat: to as CategoryId }
+        : edited;
+    });
 
   return moved.sort((a, b) => {
     if (a.cat !== b.cat) return 0; // 카테고리 간 순서는 CATEGORIES 정의를 따른다

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
-import { CATEGORIES } from "@/lib/sites";
+import { CATEGORIES, SITES } from "@/lib/sites";
 import { useCategories, useSites, webappPost } from "@/lib/use-sites";
 import { DEFAULT_PAID_SITE_IDS } from "@/lib/membership";
 import { saveSiteConfig, useSiteConfig, type SiteConfig } from "@/lib/site-config";
@@ -140,8 +140,9 @@ export default function SiteAdmin() {
     }
   };
 
+  /** 사이트 수정 — 시트 등록분은 시트를, 코드 내장분은 설정 덮어쓰기를 갱신 */
   const editSite = async (id: string) => {
-    const site = dynamic.find((s) => s.id === id);
+    const site = sites.find((s) => s.id === id);
     if (!site) return;
     const newName = window.prompt("사이트 이름", site.name);
     if (newName === null) return;
@@ -149,6 +150,24 @@ export default function SiteAdmin() {
     if (newDesc === null) return;
     const newUrl = window.prompt("URL (https://…)", site.url);
     if (newUrl === null || !newUrl.startsWith("https://")) return;
+
+    const isDynamic = dynamic.some((d) => d.id === id);
+    if (!isDynamic) {
+      // 코드 내장 사이트 — Firestore 설정에 덮어쓰기로 저장 (소스는 그대로)
+      await persist({
+        ...draft,
+        edits: {
+          ...(draft.edits ?? {}),
+          [id]: {
+            name: newName.trim(),
+            desc: newDesc.trim(),
+            url: newUrl.trim(),
+          },
+        },
+      });
+      return;
+    }
+
     setBusy(true);
     try {
       const r = await webappPost({
@@ -167,8 +186,22 @@ export default function SiteAdmin() {
     }
   };
 
+  /** 사이트 삭제 — 시트 등록분은 시트에서 제거, 코드 내장분은 화면에서 숨김 */
   const removeSite = async (id: string, siteName: string) => {
-    if (!window.confirm(`"${siteName}" 사이트를 삭제할까요?`)) return;
+    const isDynamic = dynamic.some((d) => d.id === id);
+    const msg = isDynamic
+      ? `"${siteName}" 사이트를 삭제할까요?`
+      : `"${siteName}" 사이트를 목록에서 숨길까요?\n(기본 제공 사이트라 삭제 대신 숨김 처리되며, 아래 "숨긴 사이트"에서 되돌릴 수 있어요)`;
+    if (!window.confirm(msg)) return;
+
+    if (!isDynamic) {
+      await persist({
+        ...draft,
+        hidden: Array.from(new Set([...(draft.hidden ?? []), id])),
+      });
+      return;
+    }
+
     setBusy(true);
     try {
       const r = await webappPost({ action: "site-delete", adminKey, id });
@@ -178,6 +211,10 @@ export default function SiteAdmin() {
       setBusy(false);
     }
   };
+
+  /** 숨긴 사이트 되살리기 */
+  const unhideSite = (id: string) =>
+    persist({ ...draft, hidden: (draft.hidden ?? []).filter((x) => x !== id) });
 
   const inputCls =
     "w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700";
@@ -360,34 +397,61 @@ export default function SiteAdmin() {
                       <DollarSign className="h-4 w-4" aria-hidden="true" />
                     </button>
 
-                    {dynamic.some((d) => d.id === s.id) && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => editSite(s.id)}
-                          disabled={busy}
-                          aria-label={`${s.name} 수정`}
-                          className="rounded p-1 text-amber-500 hover:opacity-70 disabled:opacity-40"
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeSite(s.id, s.name)}
-                          disabled={busy}
-                          aria-label={`${s.name} 삭제`}
-                          className="rounded p-1 text-red-500 hover:opacity-70 disabled:opacity-40"
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => editSite(s.id)}
+                      disabled={busy}
+                      aria-label={`${s.name} 수정`}
+                      title="이름·설명·URL 수정"
+                      className="rounded p-1 text-amber-500 hover:opacity-70 disabled:opacity-40"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSite(s.id, s.name)}
+                      disabled={busy}
+                      aria-label={`${s.name} 삭제`}
+                      title={
+                        dynamic.some((d) => d.id === s.id)
+                          ? "삭제"
+                          : "목록에서 숨기기 (되돌릴 수 있어요)"
+                      }
+                      className="rounded p-1 text-red-500 hover:opacity-70 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           );
         })}
+
+        {/* 숨긴 사이트 — 되돌리기 */}
+        {(draft.hidden ?? []).length > 0 && (
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
+              🙈 숨긴 사이트 ({(draft.hidden ?? []).length}) — 되돌리려면 클릭
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(draft.hidden ?? []).map((id) => {
+                const original = SITES.find((s) => s.id === id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => unhideSite(id)}
+                    disabled={busy}
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-emerald-400 hover:text-emerald-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    {original?.name ?? id} ↩︎ 되살리기
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
