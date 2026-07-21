@@ -113,6 +113,11 @@
     filter: none;
   }
 
+  /* 글 단독 보기(/post) 본문 iframe 도 원래 색 유지 */
+  .paper #post-body {
+    filter: none;
+  }
+
   /* 반사형 디스플레이라 그림자·블러가 없다 (포커스 링은 유지) */
   .paper [class*="shadow-"],
   .paper .shadow {

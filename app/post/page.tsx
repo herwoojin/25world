@@ -65,6 +65,7 @@ export default function PostPage() {
         </button>
       </header>
       <iframe
+        id="post-body"
         sandbox=""
         srcDoc={html}
         title="글 본문"
