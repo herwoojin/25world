@@ -562,6 +562,7 @@ export default function BlogSection() {
       </div>
 
       <div
+        id="blog-posts"
         className={
           view === "card"
             ? "mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"

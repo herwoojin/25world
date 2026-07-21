@@ -103,6 +103,16 @@
     filter: grayscale(1);
   }
 
+  /* 예외 — "유튜브, 글로 다시 읽어보자" 섹션(#blog-content: 카테고리 필터 칩 +
+     게시물 목록)은 e-ink 모드에서도 원래 색을 유지한다 */
+  .paper #blog-content img,
+  .paper #blog-content video,
+  .paper #blog-content iframe,
+  .paper #blog-content svg,
+  .paper #blog-content [style*="color"]:not(.fixed) {
+    filter: none;
+  }
+
   /* 반사형 디스플레이라 그림자·블러가 없다 (포커스 링은 유지) */
   .paper [class*="shadow-"],
   .paper .shadow {
