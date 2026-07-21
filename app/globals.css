@@ -52,29 +52,74 @@
     --radius: 0.5rem;
   }
 
-  /* 종이재질 모드 — 라이트 계열 + 크림 톤 + 그레인 텍스처 */
+  /* E-ink 전자책 모드 — 반사형 전자잉크 패널을 흉내낸다.
+     · 흰색 대신 옅은 회색 배경(눈부심 없음), 발광 효과(그림자·블러) 제거
+     · 화면 전체를 회색조로 (실제 흑백 e-ink 처럼), 테두리는 또렷한 회색 선 */
   .paper {
-    --background: 42 33% 93%;
-    --foreground: 30 22% 16%;
-    --card: 42 30% 96%;
-    --card-foreground: 30 22% 16%;
-    --popover: 42 30% 96%;
-    --popover-foreground: 30 22% 16%;
-    --primary: 28 30% 22%;
-    --primary-foreground: 42 33% 95%;
-    --secondary: 40 25% 87%;
-    --secondary-foreground: 30 22% 16%;
-    --muted: 40 25% 87%;
-    --muted-foreground: 32 15% 40%;
-    --accent: 40 25% 87%;
-    --accent-foreground: 30 22% 16%;
-    --border: 38 22% 80%;
-    --input: 38 22% 80%;
-    --ring: 30 22% 30%;
+    --background: 45 7% 79%;
+    --foreground: 40 6% 14%;
+    --card: 45 8% 88%;
+    --card-foreground: 40 6% 14%;
+    --popover: 45 8% 88%;
+    --popover-foreground: 40 6% 14%;
+    --primary: 40 6% 20%;
+    --primary-foreground: 45 8% 92%;
+    --secondary: 45 6% 75%;
+    --secondary-foreground: 40 6% 16%;
+    --muted: 45 6% 75%;
+    --muted-foreground: 40 5% 34%;
+    --accent: 45 6% 75%;
+    --accent-foreground: 40 6% 16%;
+    --destructive: 0 0% 32%;
+    --destructive-foreground: 45 8% 92%;
+    --border: 42 6% 60%;
+    --input: 42 6% 60%;
+    --ring: 40 6% 28%;
   }
 
+  /* 전자잉크 특유의 미세한 입자감 */
   .paper body {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.30 0 0 0 0 0.20 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.15 0 0 0 0 0.13 0 0 0 0.14 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* 이미지·아이콘·영상 → 흑백 (전자잉크는 색을 표현하지 못한다) */
+  .paper img,
+  .paper video,
+  .paper iframe,
+  .paper svg {
+    filter: grayscale(1) contrast(0.92);
+  }
+
+  /* 배경 그라디언트 캔버스(WebGL) — 흑백 + 거의 안 보이게
+     (e-ink 는 화려한 배경이 없고, 흰 그라디언트가 섞이면 화면이 밝아진다) */
+  .paper canvas {
+    filter: grayscale(1) contrast(0.7) brightness(0.9);
+    opacity: 0.12;
+  }
+
+  /* 카테고리 색 등 인라인으로 칠해진 요소도 흑백으로.
+     .fixed 는 제외 — filter 가 fixed 자식의 기준 박스를 바꿔 위치가 틀어진다 */
+  .paper [style*="color"]:not(.fixed) {
+    filter: grayscale(1);
+  }
+
+  /* 반사형 디스플레이라 그림자·블러가 없다 (포커스 링은 유지) */
+  .paper [class*="shadow-"],
+  .paper .shadow {
+    box-shadow: none !important;
+  }
+  .paper [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+  }
+  .paper [class*="drop-shadow"] {
+    filter: none !important;
+  }
+
+  /* 그라디언트 글자(히어로 타이틀)는 단색 잉크로 */
+  .paper .bg-clip-text {
+    background-image: none !important;
+    color: hsl(var(--foreground)) !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
   }
 
   .dark {

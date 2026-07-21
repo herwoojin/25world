@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, Scroll } from "lucide-react";
+import { Sun, Moon, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark" | "paper";
@@ -9,7 +9,7 @@ type Theme = "light" | "dark" | "paper";
 const THEMES: { id: Theme; label: string; Icon: typeof Sun }[] = [
   { id: "light", label: "주간 모드", Icon: Sun },
   { id: "dark", label: "야간 모드", Icon: Moon },
-  { id: "paper", label: "종이재질 모드", Icon: Scroll },
+  { id: "paper", label: "E-ink 전자책 모드 (흑백·눈부심 없음)", Icon: BookOpen },
 ];
 
 export default function ThemeSwitcher() {
