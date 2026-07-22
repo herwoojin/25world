@@ -1,5 +1,6 @@
 import WorldHero from "@/components/world-hero";
 import CategorySections from "@/components/category-sections";
+import LibrarySection from "@/components/library-section";
 import BlogSection from "@/components/blog-section";
 import SiteAdmin from "@/components/site-admin";
 import MemberAdmin from "@/components/member-admin";
@@ -12,6 +13,7 @@ export default function Home() {
         <MemberAdmin />
         <SiteAdmin />
         <CategorySections />
+        <LibrarySection />
         <BlogSection />
       </div>
     </main>

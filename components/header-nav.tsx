@@ -120,6 +120,13 @@ export default function HeaderNav() {
           );
         })}
         <a
+          href="#library"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <span aria-hidden="true">🗂️</span>
+          자료실
+        </a>
+        <a
           href="#blog"
           className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
@@ -211,9 +218,16 @@ export default function HeaderNav() {
             );
           })}
           <a
-            href="#blog"
+            href="#library"
             onClick={closeAll}
             className="mt-1 block rounded-lg border-t border-zinc-200 px-3 py-2.5 text-sm font-bold transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+          >
+            <span aria-hidden="true">🗂️</span> 자료실
+          </a>
+          <a
+            href="#blog"
+            onClick={closeAll}
+            className="block rounded-lg px-3 py-2.5 text-sm font-bold transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             <span aria-hidden="true">📮</span> {BLOG_LABEL}
           </a>

@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-07-10**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-07-22**
 
 ## 아키텍처
 
@@ -34,6 +34,8 @@ out/  ──────────────►  Netlify 정적 호스팅
 | Firebase Auth | 12.x (npm) | 첫 화면 구글 로그인 게이트 | `components/auth-gate.tsx`, `lib/firebase.ts` | UI 게이트 (정적 사이트) |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트 | `components/blog-section.tsx` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭 (Apps Script v3) |
+| 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
+| 자료실 | — | 구글 드라이브 폴더 목록·다운로드(유료 이상) / 업로드·삭제(관리자) | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs` Apps Script 웹앱 |
 | Netlify | — | 호스팅 | — | Build `npm run build` / Publish `out` |
 
 ## 왜 이 선택인가
@@ -41,6 +43,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 - **DB 없음**: 20건의 정적 데이터는 `lib/sites.ts` TS 상수가 가장 싸고 안전 (타입 검증 공짜). 30개 초과 시 ERD §7 경로로 이관.
 - **정적 내보내기**: 서버 비용 0, Netlify 무료 티어로 충분. 이미지 요청 0건(전부 인라인 SVG)이라 Lighthouse 성능 확보.
 - **서버 컴포넌트 only**: 캐러셀 일시정지·호버 효과를 전부 CSS로 처리해 클라이언트 JS 번들 최소화 (First Load 87.5kB).
+- **자료실 = Apps Script 웹앱 (서비스 계정 아님)**: 서비스 계정은 개인(My Drive) 폴더에 파일을 만들 수 없다(저장용량 할당 없음 → `Service Accounts do not have storage quota`). Apps Script 웹앱은 소유자 권한으로 실행돼 내 드라이브에 그대로 저장되고, GCP OAuth 클라이언트·리프레시 토큰 관리도 필요 없다.
 
 ## 외부 의존 서비스
 
@@ -51,3 +54,5 @@ out/  ──────────────►  Netlify 정적 호스팅
 
 - 배터리 인디케이터(서버 용량 신호등)는 **해당 없음** — 백엔드·서버리스 함수가 전혀 없는 순수 정적 사이트.
 - 방문 카운트·검색·상태 배지는 Phase 2 백로그 (TASK.md T-15~T-18).
+- **자료실 접근제어는 UI 게이트**: 목록·다운로드 차단은 브라우저에서만 이뤄진다. 업로드/삭제만 Apps Script 가 관리자 키를 서버측에서 검증한다. 드라이브 폴더가 "링크가 있는 모든 사용자=뷰어"인 동안에는 다운로드 링크를 아는 사람은 누구나 받을 수 있다.
+- 업로드 상한 **20MB/파일** — Apps Script 요청 본문 한도(base64 인코딩으로 약 1.33배 증가)에 따른 제약.

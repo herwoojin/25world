@@ -27,6 +27,8 @@ export interface SiteConfig {
   edits?: Record<string, SiteEdit>;
   /** 화면에서 숨긴 사이트 id 목록 */
   hidden?: string[];
+  /** 자료실 Apps Script 웹앱 /exec URL (scripts/library-webapp.gs) */
+  libraryUrl?: string;
 }
 
 const EMPTY: SiteConfig = { cats: {}, catOf: {}, order: {} };
@@ -47,6 +49,7 @@ export function loadSiteConfig(force = false): Promise<SiteConfig> {
         paid: Array.isArray(d.paid) ? d.paid : undefined,
         edits: d.edits ?? {},
         hidden: Array.isArray(d.hidden) ? d.hidden : [],
+        libraryUrl: typeof d.libraryUrl === "string" ? d.libraryUrl : "",
       } as SiteConfig;
     })
     .catch(() => EMPTY);
