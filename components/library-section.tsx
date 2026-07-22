@@ -6,7 +6,15 @@
 //   · 관리자 모드       : 업로드 + 삭제 (업로드는 관리자만)
 // 실제 저장은 Apps Script 웹앱(scripts/library-webapp.gs)이 내 구글 드라이브에 한다.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FolderOpen, Lock, RefreshCw, Trash2, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  FolderOpen,
+  Lock,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAdminKey, useAdminOn } from "@/components/admin-button";
 import { getFirebaseAuth } from "@/lib/firebase";
@@ -55,6 +63,23 @@ export default function LibrarySection() {
   const [busy, setBusy] = useState("");
   const [urlDraft, setUrlDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 섹션 접기 — 제목만 남기고 숨기기 (localStorage 에 기억, 블로그 섹션과 같은 방식)
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("25world:library-collapsed") === "1");
+    } catch {}
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("25world:library-collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     if (!url) return;
@@ -175,7 +200,7 @@ export default function LibrarySection() {
           ({files?.length ?? "…"})
         </span>
       )}
-      {url && (
+      {url && !collapsed && (
         <button
           type="button"
           onClick={load}
@@ -186,12 +211,27 @@ export default function LibrarySection() {
           새로고침
         </button>
       )}
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-controls="library-content"
+        className="flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
+      >
+        <ChevronDown
+          aria-hidden="true"
+          className={`h-3.5 w-3.5 transition-transform ${collapsed ? "" : "rotate-180"}`}
+        />
+        {collapsed ? "펼치기" : "숨기기"}
+      </button>
     </h2>
   );
 
   return (
     <section id="library" className="scroll-mt-16">
       {heading}
+      {!collapsed && (
+      <div id="library-content">
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
         우리 모두가 만든 자료입니다. 상상은 현실이 되는 AI시대, 같이 공유드립니다.
       </p>
@@ -375,6 +415,8 @@ export default function LibrarySection() {
             })}
           </div>
         </>
+      )}
+      </div>
       )}
     </section>
   );
