@@ -12,7 +12,8 @@ export interface LibraryFile {
   mimeType: string;
   desc: string;
   updatedAt: string;
-  downloadUrl: string;
+  /** 유료회원 이상만 받을 수 있는 파일인가 (서버가 판정) */
+  vip: boolean;
   viewUrl: string;
 }
 
@@ -61,6 +62,46 @@ export async function listLibraryFiles(webappUrl: string): Promise<LibraryFile[]
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "목록을 불러오지 못했습니다.");
   return data.files as LibraryFile[];
+}
+
+/** 다운로드 링크 요청 — 서버가 로그인 토큰을 검증하고 등급까지 확인한 뒤에만 URL 을 내준다.
+ *  (폴더를 "제한됨"으로 두면 이 경로 말고는 파일을 받을 방법이 없다) */
+export async function requestDownloadUrl(
+  webappUrl: string,
+  opts: { idToken?: string; adminKey?: string; fileId: string }
+): Promise<string> {
+  const r = await post(webappUrl, {
+    action: "download",
+    id: opts.fileId,
+    idToken: opts.idToken ?? "",
+    adminKey: opts.adminKey ?? "",
+  });
+  if (r.ok && r.url) return r.url as string;
+  if (r.error === "login-required") throw new Error("로그인 후 이용해 주세요.");
+  if (r.error === "paid-only")
+    throw new Error("유료회원 이상만 받을 수 있는 자료입니다.");
+  throw new Error(r.error || "다운로드 링크를 받지 못했습니다.");
+}
+
+/** 다운로드 허용(유료회원) 이메일 목록을 웹앱에 동기화 — 관리자만 */
+export async function syncPaidEmails(
+  webappUrl: string,
+  adminKey: string,
+  emails: string[]
+): Promise<number> {
+  const r = await post(webappUrl, { action: "syncPaid", adminKey, emails });
+  if (!r.ok) throw new Error(r.error || "동기화에 실패했습니다.");
+  return Number(r.count ?? emails.length);
+}
+
+/** 지금까지 부여된 열람 권한 전체 회수 — 관리자만 */
+export async function revokeAllAccess(
+  webappUrl: string,
+  adminKey: string
+): Promise<number> {
+  const r = await post(webappUrl, { action: "revokeAll", adminKey });
+  if (!r.ok) throw new Error(r.error || "회수에 실패했습니다.");
+  return Number(r.revoked ?? 0);
 }
 
 /** File → base64 (data URL 의 콤마 뒤 부분) */

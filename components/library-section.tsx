@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FolderOpen, Lock, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAdminKey, useAdminOn } from "@/components/admin-button";
-import { useEffectiveGroup } from "@/lib/membership";
+import { getFirebaseAuth } from "@/lib/firebase";
+import { listUsers, useEffectiveGroup } from "@/lib/membership";
 import { useSiteConfig, saveSiteConfig } from "@/lib/site-config";
 import {
   MAX_UPLOAD_MB,
@@ -17,6 +18,9 @@ import {
   fileEmoji,
   formatBytes,
   listLibraryFiles,
+  requestDownloadUrl,
+  revokeAllAccess,
+  syncPaidEmails,
   uploadLibraryFile,
   type LibraryFile,
 } from "@/lib/library";
@@ -41,9 +45,9 @@ export default function LibrarySection() {
   const cfg = useSiteConfig();
   const group = useEffectiveGroup();
   const adminOn = useAdminOn();
-  // 목록은 누구나 볼 수 있고, 압축파일(zip)만 유료회원 이상이 받을 수 있다
+  // 목록은 누구나 볼 수 있고, 압축파일(zip)만 유료회원 이상이 받을 수 있다.
+  // 아래 판정은 화면 표시용이고, 실제 차단은 웹앱이 로그인 토큰을 검증해 수행한다.
   const paidUp = group === "paid" || group === "vip" || group === "admin";
-  const isVipFile = (name: string) => /\.(zip|7z|rar)$/i.test(name.trim());
 
   const url = cfg.libraryUrl?.trim() ?? "";
   const [files, setFiles] = useState<LibraryFile[] | null>(null);
@@ -89,6 +93,54 @@ export default function LibrarySection() {
     setBusy("");
     if (inputRef.current) inputRef.current.value = "";
     load();
+  };
+
+  // 다운로드 — 웹앱이 신원·등급을 확인한 뒤 내주는 링크로만 연다
+  const download = async (f: LibraryFile) => {
+    setError("");
+    setBusy(`"${f.name}" 준비 중…`);
+    try {
+      const idToken = await getFirebaseAuth().currentUser?.getIdToken();
+      const link = await requestDownloadUrl(url, {
+        idToken,
+        adminKey: getAdminKey(),
+        fileId: f.id,
+      });
+      window.open(link, "_blank", "noopener");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "다운로드에 실패했습니다.");
+    }
+    setBusy("");
+  };
+
+  // 유료회원 이메일을 웹앱에 밀어 넣는다 — 서버가 이 목록으로 다운로드를 판정한다
+  const syncPaid = async () => {
+    setBusy("유료회원 목록 동기화 중…");
+    setError("");
+    try {
+      const users = await listUsers();
+      const emails = users
+        .filter((u) => u.group !== "general" && u.email)
+        .map((u) => u.email);
+      const n = await syncPaidEmails(url, getAdminKey(), emails);
+      setBusy("");
+      window.alert(`유료회원 이상 ${n}명의 다운로드 권한을 동기화했습니다.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "동기화에 실패했습니다.");
+      setBusy("");
+    }
+  };
+
+  const revokeAll = async () => {
+    if (!window.confirm("지금까지 부여된 파일 열람 권한을 모두 회수할까요?")) return;
+    setBusy("권한 회수 중…");
+    try {
+      const n = await revokeAllAccess(url, getAdminKey());
+      window.alert(`${n}건의 열람 권한을 회수했습니다.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "회수에 실패했습니다.");
+    }
+    setBusy("");
   };
 
   const remove = async (f: LibraryFile) => {
@@ -176,6 +228,24 @@ export default function LibrarySection() {
               연결 저장
             </Button>
           </div>
+
+          {url && (
+            <>
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-amber-400/20 pt-3">
+                <Button variant="outline" onClick={syncPaid} disabled={Boolean(busy)}>
+                  유료회원 권한 동기화
+                </Button>
+                <Button variant="outline" onClick={revokeAll} disabled={Boolean(busy)}>
+                  열람 권한 전체 회수
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                회원 등급을 바꾼 뒤에는 <b>동기화</b>를 눌러야 서버의 다운로드
+                허용 목록에 반영됩니다. 등급이 내려간 사람의 기존 권한은{" "}
+                <b>전체 회수</b> 후 다시 동기화하면 정리됩니다.
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -241,7 +311,7 @@ export default function LibrarySection() {
               </p>
             )}
             {files?.map((f) => {
-              const vip = isVipFile(f.name);
+              const vip = f.vip;
               const locked = vip && !paidUp;
               return (
               <article
@@ -280,16 +350,16 @@ export default function LibrarySection() {
                     유료회원 전용
                   </span>
                 ) : (
-                  <a
-                    href={f.downloadUrl}
-                    target="_blank"
-                    rel="noopener"
+                  <button
+                    type="button"
+                    onClick={() => download(f)}
+                    disabled={Boolean(busy)}
                     aria-label={`${f.name} 다운로드`}
-                    className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-400 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-300"
+                    className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-400 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
                   >
                     <Download className="h-4 w-4" aria-hidden="true" />
                     다운로드
-                  </a>
+                  </button>
                 )}
                 {adminOn && (
                   <button
