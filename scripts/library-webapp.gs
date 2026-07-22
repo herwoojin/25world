@@ -23,8 +23,9 @@ const FOLDER_ID = '1HlcB_X5WEiuEOqZ-pHwmflYLRpidoFmz';
 // 업로드/삭제에 필요한 관리자 키 — 사이트 관리자 모드의 "아이디:비밀번호" 와 같아야 한다
 const ADMIN_KEY = 'admin:2525';
 
-// 업로드 허용 최대 크기 (Apps Script 요청 본문 한도를 고려한 안전값)
-const MAX_UPLOAD_MB = 20;
+// 폴백(base64) 업로드의 최대 크기.
+// 큰 파일은 브라우저 → 구글 드라이브 직접 업로드(resumable)를 쓰므로 이 값에 걸리지 않는다.
+const MAX_UPLOAD_MB = 30;
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
@@ -81,6 +82,18 @@ function doPost(e) {
     }
 
     if (body.action === 'verify') return json_({ ok: true });
+
+    // 대용량 업로드용 1회성 토큰.
+    // 관리자 브라우저가 이 토큰으로 구글 드라이브에 파일을 직접(resumable) 올린다.
+    // → Apps Script 요청 본문 한도(base64)를 우회하므로 GB 단위도 가능.
+    // 토큰은 이 스크립트 소유자 권한이고 약 1시간 뒤 만료된다.
+    if (body.action === 'token') {
+      return json_({
+        ok: true,
+        token: ScriptApp.getOAuthToken(),
+        folderId: FOLDER_ID,
+      });
+    }
 
     if (body.action === 'upload') {
       const name = String(body.name || '').trim();

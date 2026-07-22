@@ -16,8 +16,13 @@ export interface LibraryFile {
   viewUrl: string;
 }
 
-/** Apps Script 요청 본문 한도를 고려한 업로드 상한 (gs 의 MAX_UPLOAD_MB 와 맞춘다) */
-export const MAX_UPLOAD_MB = 20;
+/** 폴백(base64 → Apps Script) 경로의 상한 — gs 의 MAX_UPLOAD_MB 와 맞춘다 */
+export const FALLBACK_MAX_MB = 30;
+
+/** 기본 경로(브라우저 → 드라이브 직접 업로드)의 상한.
+ *  드라이브 API 자체는 파일당 5TB 까지 받지만, 실질 한도는 계정의 저장용량(무료 15GB)이다.
+ *  브라우저·네트워크 현실을 감안해 2GB 에서 막는다. */
+export const MAX_UPLOAD_MB = 2048;
 
 export function formatBytes(n: number): string {
   if (!n) return "0 B";
@@ -68,15 +73,82 @@ function toBase64(file: File): Promise<string> {
   });
 }
 
+/** 브라우저 → 구글 드라이브 직접 업로드 (resumable).
+ *  Apps Script 에서 1회성 OAuth 토큰만 받아오고, 파일 본문은 구글 서버로 바로 보낸다.
+ *  덕분에 base64 변환도, Apps Script 요청 본문 한도도 거치지 않는다. */
+async function uploadDirect(
+  webappUrl: string,
+  adminKey: string,
+  file: File,
+  desc: string,
+  onProgress?: (pct: number) => void
+): Promise<void> {
+  const t = await post(webappUrl, { action: "token", adminKey });
+  if (!t.ok || !t.token) throw new Error(t.error || "업로드 토큰을 받지 못했습니다.");
+
+  // 1) 세션 시작 — 업로드 URL(Location 헤더)을 받는다
+  const start = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${t.token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": file.type || "application/octet-stream",
+        "X-Upload-Content-Length": String(file.size),
+      },
+      body: JSON.stringify({
+        name: file.name,
+        description: desc || undefined,
+        parents: [t.folderId],
+      }),
+    }
+  );
+  const uploadUrl = start.headers.get("location");
+  if (!start.ok || !uploadUrl) {
+    throw new Error(`업로드 세션을 열지 못했습니다 (${start.status}).`);
+  }
+
+  // 2) 파일 본문 전송 — 진행률을 보려고 fetch 대신 XHR 을 쓴다
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+    xhr.setRequestHeader(
+      "Content-Type",
+      file.type || "application/octet-stream"
+    );
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.((e.loaded / e.total) * 100);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`업로드 실패 (${xhr.status})`));
+    xhr.onerror = () => reject(new Error("네트워크 오류로 업로드에 실패했습니다."));
+    xhr.send(file);
+  });
+}
+
 export async function uploadLibraryFile(
   webappUrl: string,
   adminKey: string,
   file: File,
-  desc = ""
+  desc = "",
+  onProgress?: (pct: number) => void
 ): Promise<void> {
   if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
-    throw new Error(`${MAX_UPLOAD_MB}MB 이하만 업로드할 수 있습니다.`);
+    throw new Error(`${(MAX_UPLOAD_MB / 1024).toFixed(0)}GB 이하만 업로드할 수 있습니다.`);
   }
+
+  try {
+    await uploadDirect(webappUrl, adminKey, file, desc, onProgress);
+    return;
+  } catch (e) {
+    // 구버전 웹앱(토큰 액션 없음) 등 — 작은 파일이면 예전 base64 경로로 재시도
+    if (file.size > FALLBACK_MAX_MB * 1024 * 1024) throw e;
+  }
+
+  onProgress?.(0);
   const data = await toBase64(file);
   const r = await post(webappUrl, {
     action: "upload",
@@ -87,6 +159,7 @@ export async function uploadLibraryFile(
     data,
   });
   if (!r.ok) throw new Error(r.error || "업로드에 실패했습니다.");
+  onProgress?.(100);
 }
 
 export async function deleteLibraryFile(

@@ -74,9 +74,11 @@ export default function LibrarySection() {
     }
     setError("");
     for (const f of Array.from(list)) {
-      setBusy(`"${f.name}" 업로드 중…`);
+      setBusy(`"${f.name}" 업로드 중… 0%`);
       try {
-        await uploadLibraryFile(url, key, f);
+        await uploadLibraryFile(url, key, f, "", (pct) =>
+          setBusy(`"${f.name}" 업로드 중… ${Math.round(pct)}%`)
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : "업로드에 실패했습니다.");
         break;
@@ -220,7 +222,8 @@ export default function LibrarySection() {
                   파일 업로드
                 </Button>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {busy || `한 파일당 최대 ${MAX_UPLOAD_MB}MB · 여러 개 선택 가능`}
+                  {busy ||
+                    `한 파일당 최대 ${MAX_UPLOAD_MB / 1024}GB · 여러 개 선택 가능 (드라이브 잔여 용량까지)`}
                 </span>
               </div>
             </div>
