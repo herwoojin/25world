@@ -31,7 +31,7 @@
       "name": "인증·접근제어",
       "items": [
         { "name": "Firebase Auth (Google 로그인)", "purpose": "첫 화면 로그인 게이트 — 로그인 후 포털 표시. npm 번들(CDN 미사용). 정적 사이트 특성상 UI 게이트", "config": "components/auth-gate.tsx, lib/firebase.ts" },
-        { "name": "회원 등급 (일반/유료/VIP/관리자)", "purpose": "Firestore users/{uid}.group 기준으로 유료 사이트·자료실 열람 게이팅", "config": "lib/membership.ts" },
+        { "name": "회원 등급 (일반/유료/VIP/관리자)", "purpose": "Firestore users/{uid}.group 기준 — 유료 사이트 열람 + 자료실 압축파일(zip) 다운로드 게이팅", "config": "lib/membership.ts" },
         { "name": "관리자 키 (id:pass)", "purpose": "관리자 모드 토글 — 자료실 업로드/삭제는 Apps Script 가 이 키를 서버측에서 대조", "config": "components/admin-button.tsx, scripts/library-webapp.gs" }
       ]
     },

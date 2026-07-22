@@ -35,7 +35,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트 | `components/blog-section.tsx` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭 (Apps Script v3) |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
-| 자료실 | — | 구글 드라이브 폴더 목록·다운로드(유료 이상) / 업로드·삭제(관리자) | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs` Apps Script 웹앱 |
+| 자료실 | — | 목록은 전체 공개, 압축파일(zip) 다운로드는 유료 이상, 업로드·삭제는 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs` Apps Script 웹앱 |
 | Netlify | — | 호스팅 | — | Build `npm run build` / Publish `out` |
 
 ## 왜 이 선택인가
@@ -54,5 +54,5 @@ out/  ──────────────►  Netlify 정적 호스팅
 
 - 배터리 인디케이터(서버 용량 신호등)는 **해당 없음** — 백엔드·서버리스 함수가 전혀 없는 순수 정적 사이트.
 - 방문 카운트·검색·상태 배지는 Phase 2 백로그 (TASK.md T-15~T-18).
-- **자료실 접근제어는 UI 게이트**: 목록·다운로드 차단은 브라우저에서만 이뤄진다. 업로드/삭제만 Apps Script 가 관리자 키를 서버측에서 검증한다. 드라이브 폴더가 "링크가 있는 모든 사용자=뷰어"인 동안에는 다운로드 링크를 아는 사람은 누구나 받을 수 있다.
+- **자료실 접근제어는 UI 게이트**: zip 다운로드 차단은 브라우저에서만 이뤄진다. 업로드/삭제만 Apps Script 가 관리자 키를 서버측에서 검증한다. 드라이브 폴더가 "링크가 있는 모든 사용자=뷰어"인 동안에는 다운로드 링크를 아는 사람은 누구나 받을 수 있다.
 - 업로드는 **브라우저 → 드라이브 직접(resumable)** 경로가 기본이라 파일 크기 제약이 사실상 없다(가드 2GB, 실질 상한은 계정 저장용량 15GB). Apps Script 는 1회성 OAuth 토큰만 발급한다. 구버전 웹앱이면 base64 폴백(≤30MB)으로 자동 전환.

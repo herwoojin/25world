@@ -41,7 +41,9 @@ export default function LibrarySection() {
   const cfg = useSiteConfig();
   const group = useEffectiveGroup();
   const adminOn = useAdminOn();
-  const canSee = group === "paid" || group === "vip" || group === "admin";
+  // 목록은 누구나 볼 수 있고, 압축파일(zip)만 유료회원 이상이 받을 수 있다
+  const paidUp = group === "paid" || group === "vip" || group === "admin";
+  const isVipFile = (name: string) => /\.(zip|7z|rar)$/i.test(name.trim());
 
   const url = cfg.libraryUrl?.trim() ?? "";
   const [files, setFiles] = useState<LibraryFile[] | null>(null);
@@ -51,7 +53,7 @@ export default function LibrarySection() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
-    if (!url || !canSee) return;
+    if (!url) return;
     setError("");
     try {
       setFiles(await listLibraryFiles(url));
@@ -59,7 +61,7 @@ export default function LibrarySection() {
       setFiles([]);
       setError(e instanceof Error ? e.message : "목록을 불러오지 못했습니다.");
     }
-  }, [url, canSee]);
+  }, [url]);
 
   useEffect(() => {
     load();
@@ -116,12 +118,12 @@ export default function LibrarySection() {
       <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-zinc-400" />
       <span aria-hidden="true">🗂️</span>
       <span>자료실</span>
-      {canSee && url && (
+      {url && (
         <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
           ({files?.length ?? "…"})
         </span>
       )}
-      {canSee && url && (
+      {url && (
         <button
           type="button"
           onClick={load}
@@ -139,8 +141,9 @@ export default function LibrarySection() {
     <section id="library" className="scroll-mt-16">
       {heading}
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        유료회원 이상만 열람·다운로드할 수 있는 공유 자료 폴더입니다. 업로드는
-        관리자만 가능합니다.
+        회원 공유 자료 폴더입니다. 목록은 모두에게 열려 있고,{" "}
+        <span className="font-semibold">압축파일(zip)은 유료회원 이상</span>만
+        내려받을 수 있습니다. 업로드는 관리자만 가능합니다.
       </p>
 
       {/* 관리자 모드: 웹앱 URL 설정 (한 번만) */}
@@ -176,30 +179,26 @@ export default function LibrarySection() {
         </div>
       )}
 
-      {/* 비회원·일반회원 잠금 */}
-      {!canSee && (
-        <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm">
-          <p className="flex items-center gap-2 font-semibold text-amber-500">
-            <Lock className="h-4 w-4" aria-hidden="true" />
-            자료실{" "}
-            <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
-              VIP
-            </span>
-          </p>
-          <p className="mt-1.5 text-zinc-500 dark:text-zinc-400">
-            유료회원 이상 전용입니다. 등급을 올리면 자료 목록과 다운로드가 열립니다.
-          </p>
-        </div>
+      {/* 일반회원 안내 — 목록은 보이되 zip 은 잠긴다 */}
+      {!paidUp && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/5 px-4 py-2.5 text-sm text-amber-500">
+          <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="text-zinc-500 dark:text-zinc-400">
+            <span className="font-semibold text-amber-500">VIP</span> 표시가 붙은
+            압축파일은 유료회원 이상만 받을 수 있어요. 나머지 자료는 바로
+            내려받을 수 있습니다.
+          </span>
+        </p>
       )}
 
       {/* 연결 전 안내 */}
-      {canSee && !url && (
+      {!url && (
         <p className="mt-4 rounded-xl border border-zinc-200 bg-background/60 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
           자료실이 아직 준비 중입니다.
         </p>
       )}
 
-      {canSee && url && (
+      {url && (
         <>
           {/* 관리자 업로드 */}
           {adminOn && (
@@ -241,31 +240,57 @@ export default function LibrarySection() {
                 아직 올라온 자료가 없습니다.
               </p>
             )}
-            {files?.map((f) => (
+            {files?.map((f) => {
+              const vip = isVipFile(f.name);
+              const locked = vip && !paidUp;
+              return (
               <article
                 key={f.id}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
+                className={`flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800 ${
+                  locked ? "opacity-60" : ""
+                }`}
               >
                 <span aria-hidden="true" className="text-xl">
                   {fileEmoji(f.name, f.mimeType)}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-bold">{f.name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="truncate font-bold">{f.name}</span>
+                    {vip && (
+                      <span
+                        title="유료회원 이상 다운로드 가능"
+                        className="shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black"
+                      >
+                        VIP
+                      </span>
+                    )}
+                  </span>
                   <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
                     {formatBytes(f.size)} · {formatKST(f.updatedAt)}
                     {f.desc && ` · ${f.desc}`}
                   </span>
                 </span>
-                <a
-                  href={f.downloadUrl}
-                  target="_blank"
-                  rel="noopener"
-                  aria-label={`${f.name} 다운로드`}
-                  className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-400 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-300"
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                  다운로드
-                </a>
+                {locked ? (
+                  <span
+                    aria-disabled="true"
+                    title="유료회원 이상 전용입니다"
+                    className="flex min-h-[44px] cursor-not-allowed items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+                  >
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                    유료회원 전용
+                  </span>
+                ) : (
+                  <a
+                    href={f.downloadUrl}
+                    target="_blank"
+                    rel="noopener"
+                    aria-label={`${f.name} 다운로드`}
+                    className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-400 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    다운로드
+                  </a>
+                )}
                 {adminOn && (
                   <button
                     type="button"
@@ -278,7 +303,8 @@ export default function LibrarySection() {
                   </button>
                 )}
               </article>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
