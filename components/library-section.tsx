@@ -193,9 +193,7 @@ export default function LibrarySection() {
     <section id="library" className="scroll-mt-16">
       {heading}
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        회원 공유 자료 폴더입니다. 목록은 모두에게 열려 있고,{" "}
-        <span className="font-semibold">압축파일(zip)은 유료회원 이상</span>만
-        내려받을 수 있습니다. 업로드는 관리자만 가능합니다.
+        우리 모두가 만든 자료입니다. 상상은 현실이 되는 AI시대, 같이 공유드립니다.
       </p>
 
       {/* 관리자 모드: 웹앱 URL 설정 (한 번만) */}
