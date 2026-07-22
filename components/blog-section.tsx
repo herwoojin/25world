@@ -92,18 +92,19 @@ async function webappPost(payload: object) {
 
 export default function BlogSection() {
   const [posts, setPosts] = useState<BlogPost[] | null>(null);
-  // 섹션 접기 — 제목만 남기고 숨기기 (localStorage 에 기억)
+  // 섹션 접기 — 제목만 남기고 숨기기.
+  // 접은 상태는 sessionStorage 에만 기억한다 → 새로 접속(로그인)하면 항상 펼쳐진 채 시작.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     try {
-      setCollapsed(localStorage.getItem("25world:blog-collapsed") === "1");
+      setCollapsed(sessionStorage.getItem("25world:blog-collapsed") === "1");
     } catch {}
   }, []);
   const toggleCollapsed = () => {
     setCollapsed((v) => {
       const next = !v;
       try {
-        localStorage.setItem("25world:blog-collapsed", next ? "1" : "0");
+        sessionStorage.setItem("25world:blog-collapsed", next ? "1" : "0");
       } catch {}
       return next;
     });
