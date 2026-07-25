@@ -1,4 +1,5 @@
 import AdminButton from "@/components/admin-button";
+import ScrollTop from "@/components/scroll-top";
 import VisitorStatsBadge from "@/components/visitor-stats";
 
 export default function SiteFooter() {
@@ -17,6 +18,7 @@ export default function SiteFooter() {
           <AdminButton />
         </span>
       </div>
+      <ScrollTop />
     </footer>
   );
 }

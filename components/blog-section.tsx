@@ -13,6 +13,7 @@ import {
   List,
   Pencil,
   Plus,
+  RefreshCw,
   Star,
   Trash2,
 } from "lucide-react";
@@ -397,12 +398,23 @@ export default function BlogSection() {
         <span className="text-base font-normal text-zinc-500 dark:text-zinc-400">
           ({posts?.length ?? "…"})
         </span>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => loadPosts()}
+            aria-label="목록 새로고침"
+            className="ml-1 flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            새로고침
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-expanded={!collapsed}
           aria-controls="blog-content"
-          className="ml-1 flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
+          className="flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-400"
         >
           <ChevronDown
             aria-hidden="true"
