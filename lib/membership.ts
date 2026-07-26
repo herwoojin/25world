@@ -181,3 +181,24 @@ export async function setUserRole(
 export async function deleteUserProfile(uid: string): Promise<void> {
   await deleteDoc(doc(db(), "users", uid));
 }
+
+// ── 사용자별 테마 설정 (cross-device 동기화) ─────────────────
+export type Theme = "light" | "dark" | "paper";
+
+/** Firestore users/{uid}.theme 에 테마 저장 */
+export async function saveUserTheme(theme: Theme): Promise<void> {
+  const auth = getFirebaseAuth();
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  await setDoc(doc(db(), "users", uid), { theme }, { merge: true });
+}
+
+/** Firestore users/{uid}.theme 에서 테마 불러오기 (없으면 null) */
+export async function loadUserTheme(): Promise<Theme | null> {
+  const auth = getFirebaseAuth();
+  const uid = auth.currentUser?.uid;
+  if (!uid) return null;
+  const snap = await getDoc(doc(db(), "users", uid)).catch(() => null);
+  const t = snap?.data()?.theme;
+  return t === "light" || t === "dark" || t === "paper" ? t : null;
+}

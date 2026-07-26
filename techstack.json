@@ -55,8 +55,8 @@
         },
         {
           "name": "테마 시스템",
-          "purpose": "주간/야간/종이재질 3모드 — html 클래스 + localStorage('25world:theme'), 페인트 전 인라인 스크립트로 복원",
-          "config": "components/theme-switcher.tsx, app/globals.css(.paper)"
+          "purpose": "주간/야간(기본)/E-ink 3모드 — html 클래스 + localStorage('25world:theme'), 페인트 전 인라인 스크립트로 복원. 로그인 사용자는 Firestore users/{uid}.theme 로 기기 간 동기화(onAuthStateChanged 시점 반영)",
+          "config": "components/theme-switcher.tsx, app/globals.css(.paper), lib/membership.ts(saveUserTheme/loadUserTheme)"
         }
       ]
     },

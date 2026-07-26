@@ -29,7 +29,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | CategoryOrbital | — | 카테고리별 궤도 UI (자동 회전 + 상세 카드) | `components/category-orbital.tsx` | 클라이언트 컴포넌트 |
 | clsx / tailwind-merge | — | `cn()` 유틸 | `lib/utils.ts` | |
 | lucide-react | — | 테마 스위처 아이콘 | `components/theme-switcher.tsx` | Sun/Moon/Scroll |
-| 테마 시스템 | — | 주간/야간/종이재질 3모드 | `components/theme-switcher.tsx`, `app/globals.css` | localStorage `25world:theme`, FOUC 방지 인라인 스크립트 |
+| 테마 시스템 | — | 주간/야간(기본)/E-ink 3모드 | `components/theme-switcher.tsx`, `app/globals.css`, `lib/membership.ts` | localStorage `25world:theme` + FOUC 방지 인라인 스크립트. 로그인 시 Firestore `users/{uid}.theme` 로 기기 간 동기화 |
 | PWA | — | 홈 화면 설치 + 오프라인 | `public/manifest.webmanifest`, `public/sw.js` | SW는 프로덕션에서만 등록 |
 | Firebase Auth | 12.x (npm) | 첫 화면 구글 로그인 게이트 | `components/auth-gate.tsx`, `lib/firebase.ts` | UI 게이트 (정적 사이트) |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트 | `components/blog-section.tsx` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트) |
