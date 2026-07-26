@@ -59,7 +59,7 @@ interface BlogPost {
 
 type View = "card" | "list";
 type Sort = "new" | "old" | "likes" | "title";
-type CatFilter = BlogCatId | "all" | "fav";
+type CatFilter = BlogCatId | "all" | "fav" | "vip";
 
 // 보기 설정은 사용자별로 브라우저에 저장 (기본: 카드뉴스)
 const VIEW_KEY = "25world:blogView";
@@ -389,6 +389,8 @@ export default function BlogSection() {
     let list = [...(posts ?? [])];
     if (catFilter === "fav") {
       list = list.filter((p) => favs.has(p.id));
+    } else if (catFilter === "vip") {
+      list = list.filter((p) => previews[p.id]?.paid === true);
     } else if (catFilter !== "all") {
       list = list.filter(
         (p) => blogCat(previews[p.id]?.category).id === catFilter
@@ -578,6 +580,21 @@ export default function BlogSection() {
             aria-hidden="true"
           />
           즐겨찾기 {favs.size}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCatFilter("vip")}
+          aria-pressed={catFilter === "vip"}
+          className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            catFilter === "vip"
+              ? "border-amber-500 bg-amber-500 text-black"
+              : "border-amber-500/50 text-amber-600 hover:border-amber-500 dark:text-amber-400"
+          }`}
+        >
+          <span aria-hidden="true" className="text-[11px] font-extrabold">
+            VIP
+          </span>
+          유료전용 {posts?.filter((p) => previews[p.id]?.paid === true).length ?? 0}
         </button>
 
         {BLOG_CATS.map((c) => {
