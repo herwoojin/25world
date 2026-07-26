@@ -36,7 +36,13 @@ import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { fetchPostHtml, formatKST } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
-import { loadAllPreviews, setPostCategory, type Preview } from "@/lib/previews";
+import {
+  loadAllPreviews,
+  setPostCategory,
+  setPostPaid,
+  type Preview,
+} from "@/lib/previews";
+import { useEffectiveGroup } from "@/lib/membership";
 import {
   BLOG_WEBAPP_URL,
   getFirebaseApp,
@@ -123,6 +129,10 @@ export default function BlogSection() {
   const [favBusy, setFavBusy] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
 
+  // 유료회원 이상인가 — VIP 지정 글 열람 게이팅용 (관리자 모드도 admin 으로 승격됨)
+  const group = useEffectiveGroup();
+  const paidUp = group === "paid" || group === "vip" || group === "admin";
+
   // NotebookLM 소스용 절대 URL 생성 (SSR 안전)
   useEffect(() => setOrigin(window.location.origin), []);
   // 관리자 모드 (푸터 🔐 버튼으로 켜고 끔)
@@ -187,13 +197,33 @@ export default function BlogSection() {
     loadAllPreviews().then(setPreviews);
   }, [loadPosts]);
 
+  const emptyPreview: Preview = {
+    image: null,
+    heading: null,
+    excerpt: null,
+    category: null,
+    paid: false,
+  };
+
   const changeCategory = async (postId: string, cat: BlogCatId) => {
     setPreviews((prev) => ({
       ...prev,
-      [postId]: { ...(prev[postId] ?? { image: null, heading: null, excerpt: null }), category: cat },
+      [postId]: { ...(prev[postId] ?? emptyPreview), category: cat },
     }));
     await setPostCategory(postId, cat).catch(() =>
       window.alert("카테고리 저장에 실패했습니다.")
+    );
+  };
+
+  // 관리자: 글을 VIP(유료 전용)로 지정/해제
+  const togglePaid = async (postId: string) => {
+    const next = !previews[postId]?.paid;
+    setPreviews((prev) => ({
+      ...prev,
+      [postId]: { ...(prev[postId] ?? emptyPreview), paid: next },
+    }));
+    await setPostPaid(postId, next).catch(() =>
+      window.alert("VIP 설정 저장에 실패했습니다.")
     );
   };
 
@@ -595,6 +625,8 @@ export default function BlogSection() {
 
           const nlmTitle = previews[post.id]?.heading || post.title;
           const faved = favs.has(post.id);
+          const vip = previews[post.id]?.paid === true;
+          const locked = vip && !paidUp; // VIP 글인데 유료 미만 → 열람 차단
 
           // 하트·즐겨찾기는 항상 노출, 나머지는 ⋯ 드롭다운으로 묶는다
           const actions = (
@@ -676,6 +708,20 @@ export default function BlogSection() {
                     </select>
                     <Button
                       variant="outline"
+                      onClick={() => togglePaid(post.id)}
+                      aria-pressed={vip}
+                      aria-label={`${post.title} 유료 전용 지정 토글`}
+                      className={`min-h-[44px] justify-start gap-2 ${
+                        vip ? "text-amber-500" : ""
+                      }`}
+                    >
+                      <span aria-hidden="true" className="text-xs font-extrabold">
+                        VIP
+                      </span>
+                      {vip ? "유료 전용 해제" : "유료 전용 지정"}
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => editTitle(post)}
                       disabled={adminBusy}
                       aria-label={`${post.title} 제목 수정`}
@@ -708,49 +754,75 @@ export default function BlogSection() {
                 title={post.title}
                 savedAt={post.savedAt}
                 preview={previews[post.id]}
+                vip={vip}
+                locked={locked}
               >
                 {actions}
               </PostCard>
             );
           }
 
+          const listInner = (
+            <span className="min-w-0">
+              <span className="flex items-center gap-2">
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-zinc-900"
+                  style={{
+                    backgroundColor: blogCat(previews[post.id]?.category).color,
+                  }}
+                >
+                  {blogCat(previews[post.id]?.category).emoji}{" "}
+                  {blogCat(previews[post.id]?.category).name}
+                </span>
+                {vip && (
+                  <span className="shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
+                    VIP
+                  </span>
+                )}
+                <span
+                  className={`truncate font-bold ${locked ? "" : "group-hover:underline"}`}
+                >
+                  {previews[post.id]?.heading || post.title}
+                </span>
+              </span>
+              <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                {formatDate(post.savedAt)}
+                {post.from ? ` · ${post.from}` : ""}
+                {locked && " · 🔒 유료회원 전용"}
+              </span>
+            </span>
+          );
+
           return (
             <article
               key={post.id}
-              className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800"
+              className={`flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-background/60 px-4 py-3 dark:border-zinc-800 ${
+                locked ? "opacity-70" : ""
+              }`}
             >
-              <a
-                href={`/post?id=${encodeURIComponent(post.id)}`}
-                target="_blank"
-                rel="noopener"
-                title="새 탭에서 읽기"
-                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-zinc-900"
-                      style={{
-                        backgroundColor: blogCat(previews[post.id]?.category).color,
-                      }}
-                    >
-                      {blogCat(previews[post.id]?.category).emoji}{" "}
-                      {blogCat(previews[post.id]?.category).name}
-                    </span>
-                    <span className="truncate font-bold group-hover:underline">
-                      {previews[post.id]?.heading || post.title}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDate(post.savedAt)}
-                    {post.from ? ` · ${post.from}` : ""}
-                  </span>
+              {locked ? (
+                <span
+                  aria-disabled="true"
+                  title="유료회원 이상만 열 수 있는 글입니다"
+                  className="flex min-w-0 flex-1 cursor-not-allowed items-center gap-2 rounded-md text-left"
+                >
+                  {listInner}
                 </span>
-                <ExternalLink
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
-                />
-              </a>
+              ) : (
+                <a
+                  href={`/post?id=${encodeURIComponent(post.id)}`}
+                  target="_blank"
+                  rel="noopener"
+                  title="새 탭에서 읽기"
+                  className="group flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {listInner}
+                  <ExternalLink
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                </a>
+              )}
 
               {actions}
             </article>

@@ -32,7 +32,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 테마 시스템 | — | 주간/야간(기본)/E-ink 3모드 | `components/theme-switcher.tsx`, `app/globals.css`, `lib/membership.ts` | localStorage `25world:theme` + FOUC 방지 인라인 스크립트. 로그인 시 Firestore `users/{uid}.theme` 로 기기 간 동기화 |
 | PWA | — | 홈 화면 설치 + 오프라인 | `public/manifest.webmanifest`, `public/sw.js` | SW는 프로덕션에서만 등록 |
 | Firebase Auth | 12.x (npm) | 첫 화면 구글 로그인 게이트 | `components/auth-gate.tsx`, `lib/firebase.ts` | UI 게이트 (정적 사이트) |
-| 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트 | `components/blog-section.tsx` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트) |
+| 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트·글별 VIP 지정 | `components/blog-section.tsx`, `lib/previews.ts` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트). 관리자가 `previews/{id}.paid`로 유료 전용 지정 → 일반회원은 목록엔 보이되 열람 차단(카드/리스트/`/post` 모두 UI 게이트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭 (Apps Script v3) |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
 | 자료실 | — | 목록은 전체 공개, 압축파일(zip) 다운로드는 유료 이상, 업로드·삭제는 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs` Apps Script 웹앱 |

@@ -141,6 +141,11 @@
           "name": "구글 드라이브 폴더 (자료실)",
           "purpose": "회원 공유 자료 원본 저장소 — 폴더 1HlcB_X5…dOFmz",
           "config": "scripts/library-webapp.gs (FOLDER_ID)"
+        },
+        {
+          "name": "Firestore previews/{id}",
+          "purpose": "블로그 글 미리보기(첫 이미지·제목·카테고리) + 관리자 지정 유료 전용 플래그(paid) — 글별 VIP 게이팅 근거",
+          "config": "lib/previews.ts"
         }
       ]
     },

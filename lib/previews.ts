@@ -11,6 +11,8 @@ export interface Preview {
   heading: string | null;
   excerpt: string | null;
   category: BlogCatId | null;
+  /** 관리자가 지정한 유료 전용 글 — 일반회원은 열 수 없다 */
+  paid: boolean;
 }
 
 export async function loadAllPreviews(): Promise<Record<string, Preview>> {
@@ -24,6 +26,7 @@ export async function loadAllPreviews(): Promise<Record<string, Preview>> {
         heading: v.heading ?? null,
         excerpt: v.excerpt ?? null,
         category: (v.category as BlogCatId) ?? null,
+        paid: v.paid === true,
       };
     });
   } catch {}
@@ -35,6 +38,15 @@ export async function setPostCategory(postId: string, category: BlogCatId) {
   await setDoc(
     doc(getFirestore(getFirebaseApp()), "previews", postId),
     { category },
+    { merge: true }
+  );
+}
+
+/** 관리자: 글을 유료 전용(VIP)으로 지정/해제 */
+export async function setPostPaid(postId: string, paid: boolean) {
+  await setDoc(
+    doc(getFirestore(getFirebaseApp()), "previews", postId),
+    { paid },
     { merge: true }
   );
 }
