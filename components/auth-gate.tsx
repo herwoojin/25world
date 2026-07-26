@@ -11,6 +11,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { startKakaoLogin } from "@/lib/kakao";
 import { upsertUserProfile } from "@/lib/membership";
 import { clearAdminKey } from "@/components/admin-button";
 import { GradientWave } from "@/components/ui/gradient-wave";
@@ -28,6 +29,17 @@ function GoogleIcon() {
       <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
       <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
+function KakaoIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#000000"
+        d="M12 3C6.99 3 3 6.2 3 10.14c0 2.53 1.68 4.75 4.2 6.01-.18.63-.66 2.31-.76 2.67-.12.45.16.44.35.32.15-.1 2.36-1.6 3.32-2.26.6.09 1.24.13 1.89.13 5.01 0 9-3.2 9-7.14S17.01 3 12 3z"
+      />
     </svg>
   );
 }
@@ -58,6 +70,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  // 카카오 콜백(/kakao)은 로그인 처리 중이라 게이트를 우회해 그대로 렌더한다
+  const [bypass, setBypass] = useState(false);
+  useEffect(() => {
+    setBypass(window.location.pathname.replace(/\/$/, "") === "/kakao");
+  }, []);
   // 직전 로그인 uid — 계정이 바뀌거나 로그아웃하면 관리자 모드를 강제 해제한다
   const lastUid = useRef<string | null | undefined>(undefined);
 
@@ -86,6 +103,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       setErr(e instanceof Error ? e.message : "로그인에 실패했습니다.");
     }
   };
+
+  if (bypass) return <>{children}</>;
 
   if (status === "in") {
     return (
@@ -158,13 +177,23 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
             {status === "loading" ? (
               <p className="text-sm text-zinc-500">로그인 상태 확인 중…</p>
             ) : (
-              <Button
-                onClick={login}
-                className="h-14 gap-3 rounded-full px-10 text-base sm:h-16 sm:px-16"
-              >
-                <GoogleIcon />
-                Google 계정으로 로그인
-              </Button>
+              <div className="flex flex-col items-center gap-3 sm:flex-row">
+                <Button
+                  onClick={login}
+                  className="h-14 gap-3 rounded-full px-10 text-base sm:h-16 sm:px-12"
+                >
+                  <GoogleIcon />
+                  Google 계정으로 로그인
+                </Button>
+                <button
+                  type="button"
+                  onClick={startKakaoLogin}
+                  className="flex h-14 items-center gap-3 rounded-full bg-[#FEE500] px-10 text-base font-semibold text-[#191600] shadow transition-colors hover:bg-[#f2da00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-16 sm:px-12"
+                >
+                  <KakaoIcon />
+                  카카오로 로그인
+                </button>
+              </div>
             )}
           </div>
 
