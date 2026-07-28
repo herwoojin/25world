@@ -52,10 +52,6 @@ export default function KakaoCallback() {
         <>
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-800" />
           <p className="text-sm text-zinc-500">카카오 로그인 처리 중…</p>
-          <p className="max-w-xs text-xs text-zinc-400">
-            서버가 잠들어 있으면 깨우는 데 최대 1분 정도 걸릴 수 있어요. 잠시만
-            기다려 주세요.
-          </p>
         </>
       )}
     </div>

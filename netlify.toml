@@ -8,3 +8,9 @@
   from = "/r/*"
   to = "/.netlify/functions/post/:splat"
   status = 200
+
+# 카카오 로그인 백엔드 (무료·상시 — Render 의존 제거)
+[[redirects]]
+  from = "/api/auth/kakao"
+  to = "/.netlify/functions/kakao-auth"
+  status = 200

@@ -73,13 +73,15 @@ export async function upsertUserProfile(u: User): Promise<void> {
   const ref = doc(db(), "users", u.uid);
   const snap = await getDoc(ref).catch(() => null);
   const prev = snap?.data() ?? {};
+  // 카카오 등 커스텀 토큰 로그인은 Firebase Auth 레코드에 이름·사진이 없어
+  // u.displayName 이 비어 있다. 그 경우 이미 저장된 값(prev, 예: 카카오 닉네임)을 보존한다.
   await setDoc(
     ref,
     {
       uid: u.uid,
-      email: u.email ?? "",
-      name: u.displayName || u.email?.split("@")[0] || "회원",
-      photo: u.photoURL ?? "",
+      email: u.email || prev.email || "",
+      name: u.displayName || prev.name || u.email?.split("@")[0] || "회원",
+      photo: u.photoURL || prev.photo || "",
       group: (prev.group as Group) ?? "general",
       role: (prev.role as "user" | "admin") ?? "user",
       updatedAt: Date.now(),

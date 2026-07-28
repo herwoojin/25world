@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-07-27",
+  "lastUpdated": "2026-07-28",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -104,9 +104,9 @@
           "config": "scripts/library-webapp.gs (paidEmails_)"
         },
         {
-          "name": "카카오 로그인 (Firebase 커스텀 토큰)",
-          "purpose": "구글 로그인 옆 카카오 로그인 — /kakao 콜백이 code 를 tg-post-saver 백엔드로 넘겨 Firebase 커스텀 토큰을 받아 signInWithCustomToken. uid=kakao_{id}",
-          "config": "lib/kakao.ts, app/kakao/page.tsx, components/auth-gate.tsx, (백엔드) tg-post-saver/kakao-auth.js"
+          "name": "카카오 로그인 (Netlify Function + 커스텀 토큰)",
+          "purpose": "구글 옆 카카오 로그인 — /kakao 콜백이 code 를 Netlify Function(무료·상시)으로 보내 카카오 토큰·프로필 교환 후 node:crypto 로 Firebase 커스텀 토큰(uid=kakao_{id})을 RS256 서명. Render 의존 없음",
+          "config": "lib/kakao.ts, app/kakao/page.tsx, netlify/functions/kakao-auth.mjs, netlify.toml"
         }
       ]
     },
