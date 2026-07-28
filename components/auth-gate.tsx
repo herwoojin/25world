@@ -16,7 +16,8 @@ import { upsertUserProfile } from "@/lib/membership";
 import { clearAdminKey } from "@/components/admin-button";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { Button } from "@/components/ui/button";
-import { CATEGORIES, SITES, getCategoryColor } from "@/lib/sites";
+import { SITES, getCategoryColor } from "@/lib/sites";
+import { useSites, useCategories } from "@/lib/use-sites";
 
 type Status = "loading" | "in" | "out";
 
@@ -70,6 +71,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  // 실제 등록된 사이트/카테고리 (관리자 모드에서 추가·수정한 동적 사이트 반영).
+  // 로그인 전에도 공개 데이터라 읽을 수 있다.
+  const { sites } = useSites();
+  const cats = useCategories();
   // 카카오 콜백(/kakao)은 로그인 처리 중이라 게이트를 우회해 그대로 렌더한다
   const [bypass, setBypass] = useState(false);
   useEffect(() => {
@@ -147,7 +152,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               25WORLD
             </h1>
             <p className="max-w-md text-center text-sm leading-relaxed text-zinc-600 dark:text-zinc-300 lg:text-left">
-              바이브코딩으로 직접 만든 {SITES.length}개의 사이트를 한 곳에서.
+              바이브코딩으로 직접 만든 {sites.length}개의 사이트를 한 곳에서.
               편의점 업무부터 AI 에이전트, 공공데이터, 콘텐츠 제작까지 —
               구글 계정으로 로그인하고 둘러보세요.
             </p>
@@ -207,7 +212,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         {/* 카테고리 마퀴 */}
         <div className="relative z-10 mt-12 w-full">
           <p className="mb-5 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            {CATEGORIES.length}개 카테고리로 정리된 프로젝트 모음
+            {cats.length}개 카테고리로 정리된 프로젝트 모음
           </p>
           <div className="group flex overflow-hidden [--gap:1.5rem] [gap:var(--gap)]">
             {[0, 1, 2].map((r) => (
@@ -216,8 +221,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 aria-hidden={r > 0}
                 className="flex shrink-0 animate-marquee justify-around [gap:var(--gap)] group-hover:[animation-play-state:paused] motion-reduce:animate-none"
               >
-                {CATEGORIES.map((cat) => {
-                  const count = SITES.filter((s) => s.cat === cat.id).length;
+                {cats.map((cat) => {
+                  const count = sites.filter((s) => s.cat === cat.id).length;
                   return (
                     <div
                       key={cat.id}
