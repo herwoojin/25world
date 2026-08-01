@@ -30,8 +30,25 @@ const MAX_UPLOAD_MB = 30;
 // 25world Firebase 웹 API 키 — 로그인 토큰(ID token) 검증용. 공개되어도 안전한 값이다.
 const FIREBASE_API_KEY = 'AIzaSyCuog0TdR371MNDKreqk9_4w7yrTIfa8qA';
 
-// 유료회원 이상만 받을 수 있는 확장자
+// 유료회원 이상만 받을 수 있는 기본 확장자 (관리자가 파일별로 덮어쓸 수 있다)
 const VIP_EXT = /\.(zip|7z|rar)$/i;
+
+/** 관리자가 파일별로 지정한 VIP 오버라이드 맵 {fileId: true|false} (스크립트 속성에 보관) */
+function vipMap_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('VIP_FILES');
+  try {
+    return JSON.parse(raw || '{}');
+  } catch (err) {
+    return {};
+  }
+}
+
+/** 이 파일이 VIP(유료 전용)인가 — 관리자 오버라이드가 있으면 그것을, 없으면 확장자 기본값 */
+function isVipFile_(id, name) {
+  const m = vipMap_();
+  if (Object.prototype.hasOwnProperty.call(m, id)) return m[id] === true;
+  return VIP_EXT.test(name);
+}
 
 /** 다운로드 허용 이메일 목록 (관리자가 사이트에서 동기화 → 스크립트 속성에 보관).
  *  Firestore 가 아니라 여기에 두는 이유: 회원이 브라우저에서 자기 등급을 조작해도
@@ -97,7 +114,7 @@ function listFiles_() {
       mimeType: f.getMimeType(),
       desc: f.getDescription() || '',
       updatedAt: f.getLastUpdated().toISOString(),
-      vip: VIP_EXT.test(f.getName()),
+      vip: isVipFile_(f.getId(), f.getName()),
       // 다운로드 링크는 목록에 싣지 않는다 — action:'download' 로 신원을 검증한 뒤에만 내준다
       viewUrl: f.getUrl(),
     });
@@ -143,7 +160,7 @@ function doPost(e) {
       const who = verifyIdToken_(body.idToken);
       if (!who) return json_({ ok: false, error: 'login-required' });
 
-      if (VIP_EXT.test(file.getName()) && paidEmails_().indexOf(who.email) === -1) {
+      if (isVipFile_(id, file.getName()) && paidEmails_().indexOf(who.email) === -1) {
         return json_({ ok: false, error: 'paid-only' });
       }
 
@@ -164,6 +181,19 @@ function doPost(e) {
         JSON.stringify(list)
       );
       return json_({ ok: true, count: list.length });
+    }
+
+    // 파일별 VIP 지정/해제 (확장자 기본값을 덮어쓴다)
+    if (body.action === 'setVip') {
+      const id = String(body.id || '');
+      if (!id) return json_({ ok: false, error: 'id required' });
+      const m = vipMap_();
+      m[id] = body.vip === true;
+      PropertiesService.getScriptProperties().setProperty(
+        'VIP_FILES',
+        JSON.stringify(m)
+      );
+      return json_({ ok: true });
     }
 
     // 지금까지 부여된 열람 권한을 모두 회수 (등급이 내려간 사람 정리용)

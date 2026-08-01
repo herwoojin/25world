@@ -94,6 +94,17 @@ export async function syncPaidEmails(
   return Number(r.count ?? emails.length);
 }
 
+/** 파일을 VIP(유료 전용)로 지정/해제 — 관리자만 (확장자 기본값을 덮어쓴다) */
+export async function setLibraryVip(
+  webappUrl: string,
+  adminKey: string,
+  id: string,
+  vip: boolean
+): Promise<void> {
+  const r = await post(webappUrl, { action: "setVip", adminKey, id, vip });
+  if (!r.ok) throw new Error(r.error || "VIP 설정에 실패했습니다.");
+}
+
 /** 지금까지 부여된 열람 권한 전체 회수 — 관리자만 */
 export async function revokeAllAccess(
   webappUrl: string,

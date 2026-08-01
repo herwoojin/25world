@@ -28,6 +28,7 @@ import {
   listLibraryFiles,
   requestDownloadUrl,
   revokeAllAccess,
+  setLibraryVip,
   syncPaidEmails,
   uploadLibraryFile,
   type LibraryFile,
@@ -179,6 +180,20 @@ export default function LibrarySection() {
     }
     setBusy("");
     load();
+  };
+
+  // 관리자: 파일을 VIP(유료 전용)로 지정/해제 (확장자 기본값을 덮어쓴다)
+  const toggleVip = async (f: LibraryFile) => {
+    const next = !f.vip;
+    setFiles((prev) =>
+      prev ? prev.map((x) => (x.id === f.id ? { ...x, vip: next } : x)) : prev
+    );
+    try {
+      await setLibraryVip(url, getAdminKey(), f.id, next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "VIP 설정에 실패했습니다.");
+      load(); // 실패 시 서버 상태로 되돌림
+    }
   };
 
   const saveUrl = async () => {
@@ -398,6 +413,23 @@ export default function LibrarySection() {
                   >
                     <Download className="h-4 w-4" aria-hidden="true" />
                     다운로드
+                  </button>
+                )}
+                {adminOn && (
+                  <button
+                    type="button"
+                    onClick={() => toggleVip(f)}
+                    disabled={Boolean(busy)}
+                    aria-pressed={vip}
+                    aria-label={`${f.name} 유료 전용 지정 토글`}
+                    title={vip ? "유료 전용 해제" : "유료 전용(VIP) 지정"}
+                    className={`flex min-h-[44px] items-center rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                      vip
+                        ? "border-amber-400 bg-amber-400 text-black"
+                        : "border-zinc-300 text-zinc-400 hover:border-amber-400 hover:text-amber-500 dark:border-zinc-700"
+                    }`}
+                  >
+                    VIP
                   </button>
                 )}
                 {adminOn && (
