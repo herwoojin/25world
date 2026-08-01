@@ -47,6 +47,8 @@ export interface UserProfile {
   photo: string;
   group: Group;
   role: "user" | "admin";
+  /** 로그인 수단 — 카카오 로그인이면 "kakao" (구글은 비어 있음) */
+  provider?: string;
 }
 
 function db() {
@@ -165,6 +167,7 @@ export async function listUsers(): Promise<UserProfile[]> {
       photo: x.photo ?? "",
       group: (x.group as Group) ?? "general",
       role: (x.role as "user" | "admin") ?? "user",
+      provider: x.provider ?? "",
     };
   });
 }

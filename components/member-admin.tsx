@@ -71,11 +71,18 @@ export default function MemberAdmin() {
     setUsers((prev) => (prev ? prev.filter((x) => x.uid !== u.uid) : prev));
   };
 
+  const isKakao = (u: UserProfile) =>
+    u.provider === "kakao" || u.uid.startsWith("kakao_");
+  // 이메일이 없을 때(카카오 등) 관리자가 식별할 보조 정보
+  const subInfo = (u: UserProfile) =>
+    u.email || (isKakao(u) ? `카카오 ID ${u.uid.replace(/^kakao_/, "")}` : u.uid);
+
   const filtered = (users ?? []).filter(
     (u) =>
       !q ||
       u.name.toLowerCase().includes(q.toLowerCase()) ||
-      u.email.toLowerCase().includes(q.toLowerCase())
+      u.email.toLowerCase().includes(q.toLowerCase()) ||
+      u.uid.toLowerCase().includes(q.toLowerCase())
   );
 
   return (
@@ -95,7 +102,7 @@ export default function MemberAdmin() {
         type="search"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="이름 · 이메일 검색"
+        placeholder="이름 · 이메일 · 카카오 ID 검색"
         className="w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
       />
 
@@ -121,16 +128,25 @@ export default function MemberAdmin() {
               </span>
 
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold">
-                  {u.name || "(이름 없음)"}
+                <span className="flex items-center gap-1.5 truncate text-sm font-bold">
+                  <span className="truncate">{u.name || "(이름 없음)"}</span>
+                  {isKakao(u) ? (
+                    <span className="shrink-0 rounded bg-[#FEE500] px-1.5 py-0.5 text-[10px] font-bold text-[#191600]">
+                      카카오
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                      구글
+                    </span>
+                  )}
                   {u.role === "admin" && (
-                    <span className="ml-1.5 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+                    <span className="shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
                       관리자
                     </span>
                   )}
                 </span>
                 <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                  {u.email}
+                  {subInfo(u)}
                 </span>
               </span>
 
