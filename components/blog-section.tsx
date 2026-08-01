@@ -11,11 +11,13 @@ import {
   Heart,
   LayoutGrid,
   List,
+  NotebookPen,
   Pencil,
   Plus,
   RefreshCw,
   Star,
   Trash2,
+  Volume2,
 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
@@ -462,6 +464,32 @@ export default function BlogSection() {
         텔레그램 봇에게 &quot;글 저장 + 내용&quot;이나 .html 파일을 보내면 이
         목록에 쌓입니다. 제목을 클릭하면 새 창에서 열립니다.
       </p>
+
+      {/* 각 글의 ⋯ 메뉴 기능 안내 */}
+      <div className="mt-3 flex flex-col gap-2 rounded-xl border border-zinc-200 bg-background/60 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-300 sm:flex-row sm:gap-4">
+        <p className="flex items-start gap-2">
+          <NotebookPen
+            className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400"
+            aria-hidden="true"
+          />
+          <span>
+            <b className="font-semibold text-foreground">NotebookLM 소스로 담기</b>
+            {" — "}이 글을 구글 NotebookLM에 자료로 바로 추가해요. AI에게 요약·질문하거나
+            여러 글을 묶어 학습할 때 좋아요.
+          </span>
+        </p>
+        <p className="flex items-start gap-2">
+          <Volume2
+            className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400"
+            aria-hidden="true"
+          />
+          <span>
+            <b className="font-semibold text-foreground">음성으로 듣기</b>
+            {" — "}글을 아나운서 목소리로 읽어줘요. 이동 중이나 눈이 피곤할 때 들으면서
+            볼 수 있어요.
+          </span>
+        </p>
+      </div>
 
       {/* 유료회원 전용 — 유튜브 URL → 블로그 HTML 이메일 변환 */}
       <YoutubeRequest />
