@@ -23,6 +23,9 @@ export function startKakaoLogin(): void {
     client_id: KAKAO_REST_KEY,
     redirect_uri: kakaoRedirectUri(),
     response_type: "code",
+    // 닉네임·이메일 동의를 명시적으로 요청 (기존 로그인 회원의 이메일 재동의 보장).
+    // 콘솔 동의항목에서 account_email 을 필수 동의로 켜 둔 경우에만 이메일이 넘어온다.
+    scope: "profile_nickname,account_email",
   });
   window.location.href = `https://kauth.kakao.com/oauth/authorize?${params}`;
 }
