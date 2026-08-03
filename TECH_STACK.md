@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-07-22**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-08-07**
 
 ## 아키텍처
 
@@ -30,7 +30,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | clsx / tailwind-merge | — | `cn()` 유틸 | `lib/utils.ts` | |
 | lucide-react | — | 테마 스위처 아이콘 | `components/theme-switcher.tsx` | Sun/Moon/Scroll |
 | 테마 시스템 | — | 주간/야간(기본)/E-ink 3모드 | `components/theme-switcher.tsx`, `app/globals.css`, `lib/membership.ts` | localStorage `25world:theme` + FOUC 방지 인라인 스크립트. 로그인 시 Firestore `users/{uid}.theme` 로 기기 간 동기화 |
-| PWA | — | 홈 화면 설치 + 오프라인 | `public/manifest.webmanifest`, `public/sw.js` | SW는 프로덕션에서만 등록 |
+| PWA | — | 홈 화면 설치 + 오프라인 | `public/manifest.webmanifest`, `public/sw.js` | SW는 프로덕션에서만 등록. `_next/static/*` 해시 자산은 SW 가 가로채지 않음(실패 시 HTML 로 잘못 대체 응답되는 것 방지) |
 | Firebase Auth | 12.x (npm) | 첫 화면 구글 로그인 게이트 | `components/auth-gate.tsx`, `lib/firebase.ts` | UI 게이트 (정적 사이트) |
 | 카카오 로그인 | — | 구글 옆 카카오 로그인 (code→커스텀 토큰) | `lib/kakao.ts`, `app/kakao/page.tsx`, `netlify/functions/kakao-auth.mjs` | **Netlify Function(무료·상시)** 이 카카오 토큰 교환 + `node:crypto` RS256 로 Firebase 커스텀 토큰 서명(uid=`kakao_{id}`). Render 의존 제거. 시크릿은 Netlify env 에만 |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트·글별 VIP 지정 | `components/blog-section.tsx`, `lib/previews.ts` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트). 관리자가 `previews/{id}.paid`로 유료 전용 지정 → 일반회원은 목록엔 보이되 열람 차단(카드/리스트/`/post` 모두 UI 게이트) |
@@ -39,6 +39,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상, 업로드·삭제·VIP지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`setVip`→스크립트 속성 `VIP_FILES`), 다운로드 차단은 서버 검증 |
 | 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
 | 에이전트 협업 연출 **(연동테스트중)** | — | 카테고리 궤도 중앙 허브 클릭 → 각 사이트로 입자가 튀는 애니메이션 | `components/category-orbital.tsx`, `app/globals.css`(`agent-particle-travel`) | **실제 자동화 없음** — 순수 CSS 시각 연출. 4.2초간 재생 후 "완료!" 표시, 재생 중 궤도 회전은 정지 |
+| 프론트엔드 안정성 (재시도 캐시 + 에러 경계) | — | 계정 전환 직후 등 일시적 오류로 사이트목록/설정/부가자료가 빈 채로 굳는 것 방지 | `lib/use-sites.ts`, `lib/site-config.ts`, `lib/site-resources.ts`, `components/error-boundary.tsx` | 로더 실패 시 최대 3회 짧게 재시도, 그래도 실패하면 다음 호출에서 다시 시도(캐시에 실패를 고정하지 않음). 최상위 `ErrorBoundary` 가 렌더링 오류로 전체 페이지가 빈 화면이 되는 것을 막음 |
 | Netlify | — | 호스팅 | — | Build `npm run build` / Publish `out` |
 
 ## 왜 이 선택인가

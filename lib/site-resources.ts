@@ -33,26 +33,50 @@ function db() {
   return getFirestore(getFirebaseApp());
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchAllOnce(): Promise<Record<string, SiteResource>> {
+  const snap = await getDocs(collection(db(), "siteResources"));
+  const out: Record<string, SiteResource> = {};
+  snap.forEach((d) => {
+    const v = d.data();
+    out[d.id] = {
+      gitUrl: v.gitUrl ?? "",
+      promptMd: v.promptMd ?? "",
+      promptFileName: v.promptFileName ?? "",
+      coreNote: v.coreNote ?? "",
+      updatedAt: v.updatedAt ?? 0,
+    };
+  });
+  return out;
+}
+
+/** Firestore 읽기가 간헐적으로 실패할 때(계정 전환 직후 등)를 대비해 짧게 재시도한다. */
+async function fetchAllWithRetry(): Promise<Record<string, SiteResource>> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetchAllOnce();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await sleep(500 * (attempt + 1));
+    }
+  }
+  console.error("[site-resources] 부가 자료를 불러오지 못했습니다:", lastErr);
+  throw lastErr;
+}
+
 let cache: Promise<Record<string, SiteResource>> | null = null;
 
 function loadAll(force = false): Promise<Record<string, SiteResource>> {
   if (force) cache = null;
-  cache ??= getDocs(collection(db(), "siteResources"))
-    .then((snap) => {
-      const out: Record<string, SiteResource> = {};
-      snap.forEach((d) => {
-        const v = d.data();
-        out[d.id] = {
-          gitUrl: v.gitUrl ?? "",
-          promptMd: v.promptMd ?? "",
-          promptFileName: v.promptFileName ?? "",
-          coreNote: v.coreNote ?? "",
-          updatedAt: v.updatedAt ?? 0,
-        };
-      });
-      return out;
-    })
-    .catch(() => ({}) as Record<string, SiteResource>);
+  if (!cache) {
+    cache = fetchAllWithRetry().catch(() => {
+      // 재시도까지 실패해도 실패를 캐시에 고정하지 않는다 — 다음 호출에서 다시 시도한다.
+      cache = null;
+      return {} as Record<string, SiteResource>;
+    });
+  }
   return cache;
 }
 

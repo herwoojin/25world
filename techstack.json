@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-08-05",
+  "lastUpdated": "2026-08-07",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -75,7 +75,7 @@
         },
         {
           "name": "Service Worker",
-          "purpose": "네트워크 우선 + 캐시 폴백 오프라인 지원 (프로덕션에서만 등록)",
+          "purpose": "네트워크 우선 + 캐시 폴백 오프라인 지원 (프로덕션에서만 등록). _next/static/* 해시 자산은 SW 가 가로채지 않음(실패 시 HTML 로 잘못 대체되는 것 방지)",
           "config": "public/sw.js, components/pwa-register.tsx"
         }
       ]
@@ -188,6 +188,11 @@
         {
           "name": "배터리 인디케이터",
           "purpose": "해당 없음 — 백엔드/서버리스 함수가 전혀 없는 순수 정적 사이트"
+        },
+        {
+          "name": "프론트엔드 안정성 — 재시도 캐시 + 에러 경계",
+          "purpose": "사이트목록/설정/부가자료 로더가 실패해도 빈 상태를 영구 캐시하지 않고 짧게 재시도(최대 3회) 후 다음 호출에서 다시 시도. 최상위 ErrorBoundary 가 렌더링 오류로 전체 페이지가 빈 화면이 되는 것을 막는다",
+          "config": "lib/use-sites.ts, lib/site-config.ts, lib/site-resources.ts, components/error-boundary.tsx, app/layout.tsx"
         }
       ]
     }

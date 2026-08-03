@@ -47,37 +47,66 @@ function writeCachedDynamicSites(sites: Site[]) {
   } catch {}
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchDynamicSitesOnce(): Promise<Site[]> {
+  const res = await fetch(`${BLOG_WEBAPP_URL}?type=sites`, { cache: "no-store" });
+  const rows: DynSiteRow[] = await res.json();
+  if (!Array.isArray(rows)) throw new Error("unexpected sites response shape");
+  const catIds = new Set<string>(CATEGORIES.map((c) => c.id));
+  return rows
+    .filter(
+      (r) =>
+        r &&
+        typeof r.url === "string" &&
+        r.url.startsWith("https://") &&
+        catIds.has(r.cat) &&
+        !SITES.some((s) => s.id === r.id)
+    )
+    .map((r) => {
+      const color = CATEGORIES.find((c) => c.id === r.cat)!.color;
+      return {
+        id: r.id,
+        cat: r.cat as CategoryId,
+        name: r.name || r.url,
+        desc: r.desc || "",
+        url: r.url as Site["url"],
+        icon: DEFAULT_ICON,
+        art: defaultArt(color),
+      } satisfies Site;
+    });
+}
+
+/** 구글시트 응답이 간헐적으로 실패할 때(쿨스타트·일시적 네트워크 오류)를 대비해
+ *  짧게 몇 번 더 시도한다 — 화면이 빈 채로 굳는 것보다 낫다. */
+async function fetchDynamicSitesWithRetry(): Promise<Site[]> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetchDynamicSitesOnce();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await sleep(500 * (attempt + 1));
+    }
+  }
+  console.error("[use-sites] 동적 사이트 목록을 불러오지 못했습니다:", lastErr);
+  throw lastErr;
+}
+
 let cache: Promise<Site[]> | null = null;
 
 function loadDynamicSites(): Promise<Site[]> {
-  cache ??= fetch(`${BLOG_WEBAPP_URL}?type=sites`)
-    .then((r) => r.json())
-    .then((rows: DynSiteRow[]) => {
-      if (!Array.isArray(rows)) return [];
-      const catIds = new Set<string>(CATEGORIES.map((c) => c.id));
-      return rows
-        .filter(
-          (r) =>
-            r &&
-            typeof r.url === "string" &&
-            r.url.startsWith("https://") &&
-            catIds.has(r.cat) &&
-            !SITES.some((s) => s.id === r.id)
-        )
-        .map((r) => {
-          const color = CATEGORIES.find((c) => c.id === r.cat)!.color;
-          return {
-            id: r.id,
-            cat: r.cat as CategoryId,
-            name: r.name || r.url,
-            desc: r.desc || "",
-            url: r.url as Site["url"],
-            icon: DEFAULT_ICON,
-            art: defaultArt(color),
-          } satisfies Site;
-        });
-    })
-    .catch(() => [] as Site[]);
+  if (!cache) {
+    cache = fetchDynamicSitesWithRetry().catch(() => {
+      // 재시도까지 실패한 경우 — 이번 호출자에게는 빈 배열로 응답하되,
+      // 실패를 캐시에 "고정"시키지 않는다. 그래야 다음에 이 함수가 다시
+      // 불릴 때(예: 다른 컴포넌트 마운트) 새로 시도할 수 있다.
+      // (여기서 캐시를 비우지 않으면 실패한 빈 결과가 탭이 열려 있는 동안
+      //  영구히 캐시되어, 새로고침 전까지 사이트 목록이 계속 비어 보인다.)
+      cache = null;
+      return [] as Site[];
+    });
+  }
   return cache;
 }
 

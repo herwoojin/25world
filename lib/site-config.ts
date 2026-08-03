@@ -34,25 +34,50 @@ export interface SiteConfig {
 const EMPTY: SiteConfig = { cats: {}, catOf: {}, order: {} };
 export const SITE_CONFIG_EVENT = "25world:site-config-changed";
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchSiteConfigOnce(): Promise<SiteConfig> {
+  const snap = await getDoc(doc(getFirestore(getFirebaseApp()), "siteMeta", "config"));
+  if (!snap.exists()) return EMPTY;
+  const d = snap.data();
+  return {
+    cats: d.cats ?? {},
+    catOf: d.catOf ?? {},
+    order: d.order ?? {},
+    paid: Array.isArray(d.paid) ? d.paid : undefined,
+    edits: d.edits ?? {},
+    hidden: Array.isArray(d.hidden) ? d.hidden : [],
+    libraryUrl: typeof d.libraryUrl === "string" ? d.libraryUrl : "",
+  } as SiteConfig;
+}
+
+/** Firestore 읽기가 간헐적으로 실패할 때(계정 전환 직후 등)를 대비해 짧게 재시도한다. */
+async function fetchSiteConfigWithRetry(): Promise<SiteConfig> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetchSiteConfigOnce();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await sleep(500 * (attempt + 1));
+    }
+  }
+  console.error("[site-config] 설정을 불러오지 못했습니다:", lastErr);
+  throw lastErr;
+}
+
 let cache: Promise<SiteConfig> | null = null;
 
 export function loadSiteConfig(force = false): Promise<SiteConfig> {
   if (force) cache = null;
-  cache ??= getDoc(doc(getFirestore(getFirebaseApp()), "siteMeta", "config"))
-    .then((snap) => {
-      if (!snap.exists()) return EMPTY;
-      const d = snap.data();
-      return {
-        cats: d.cats ?? {},
-        catOf: d.catOf ?? {},
-        order: d.order ?? {},
-        paid: Array.isArray(d.paid) ? d.paid : undefined,
-        edits: d.edits ?? {},
-        hidden: Array.isArray(d.hidden) ? d.hidden : [],
-        libraryUrl: typeof d.libraryUrl === "string" ? d.libraryUrl : "",
-      } as SiteConfig;
-    })
-    .catch(() => EMPTY);
+  if (!cache) {
+    cache = fetchSiteConfigWithRetry().catch(() => {
+      // 재시도까지 실패해도 이 실패를 캐시에 고정하지 않는다 — 다음 호출에서
+      // 다시 시도할 수 있어야 새로고침 없이도 스스로 복구된다.
+      cache = null;
+      return EMPTY;
+    });
+  }
   return cache;
 }
 
