@@ -25,6 +25,28 @@ const DEFAULT_ICON = `<path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l
 const defaultArt = (color: string) =>
   `<g stroke="${color}" fill="none" stroke-width="3"><path d="M56 60l3.5 8 8.5 1.2-6 6 1.4 8.6-7.4-4-7.4 4 1.4-8.6-6-6 8.5-1.2L56 60z"/><circle cx="56" cy="112" r="7" opacity=".5"/><circle cx="268" cy="84" r="26" stroke="#fff" opacity=".8"/><circle cx="268" cy="84" r="40" opacity=".4" stroke-dasharray="6 8"/><circle cx="268" cy="44" r="4" fill="${color}" stroke="none"/></g>`;
 
+// 직전에 불러온 동적 사이트 목록을 브라우저에 캐시해 둔다.
+// 없으면(최초 로딩) dynamic 이 빈 배열로 시작해 "22개"가 잠깐 보였다가
+// 네트워크 응답이 온 뒤 "41개"로 튀는 깜빡임이 생긴다. 캐시가 있으면
+// 첫 렌더부터 정확한 개수로 바로 나오고, 뒤에서 최신값으로 조용히 갱신한다.
+const DYNAMIC_CACHE_KEY = "25world:dynamicSites";
+
+function readCachedDynamicSites(): Site[] {
+  try {
+    const raw = localStorage.getItem(DYNAMIC_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? (parsed as Site[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedDynamicSites(sites: Site[]) {
+  try {
+    localStorage.setItem(DYNAMIC_CACHE_KEY, JSON.stringify(sites));
+  } catch {}
+}
+
 let cache: Promise<Site[]> | null = null;
 
 function loadDynamicSites(): Promise<Site[]> {
@@ -61,13 +83,17 @@ function loadDynamicSites(): Promise<Site[]> {
 
 /** 내장 + 동적 사이트 병합 목록 (관리자 설정: 카테고리 이동·정렬 반영) */
 export function useSites(): { sites: Site[]; dynamic: Site[] } {
-  const [dynamic, setDynamic] = useState<Site[]>([]);
+  // 캐시가 있으면 그 값으로 즉시 시작 (깜빡임 방지). 이 컴포넌트는 로그인
+  // 후 클라이언트에서만 렌더링되므로 SSR 시점에 localStorage 를 건드릴 일이 없다.
+  const [dynamic, setDynamic] = useState<Site[]>(readCachedDynamicSites);
   const cfg = useSiteConfig();
 
   useEffect(() => {
     let mounted = true;
     loadDynamicSites().then((d) => {
-      if (mounted) setDynamic(d);
+      if (!mounted) return;
+      setDynamic(d);
+      writeCachedDynamicSites(d);
     });
     return () => {
       mounted = false;
