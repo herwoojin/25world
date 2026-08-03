@@ -46,20 +46,40 @@ export function fileEmoji(name: string, mimeType = ""): string {
   return "📎";
 }
 
-async function post(url: string, payload: object): Promise<any> {
-  // Content-Type 미지정(text/plain) → Apps Script CORS preflight 회피 (다른 호출부와 동일 패턴)
-  const res = await fetch(url, { method: "POST", body: JSON.stringify(payload) });
-  const text = await res.text();
+/** 텍스트가 JSON 이 아니면(예: Apps Script 가 간헐적으로 돌려주는 HTML 오류 페이지)
+ *  원본을 그대로 노출하지 않고 사람이 읽을 수 있는 오류로 바꾼다. */
+function parseJsonSafe(text: string): any {
   try {
     return JSON.parse(text);
   } catch {
-    return { ok: false, error: text.slice(0, 200) };
+    const looksLikeHtml = /^\s*</.test(text);
+    return {
+      ok: false,
+      error: looksLikeHtml
+        ? "구글 서버가 일시적으로 응답하지 못했습니다. 잠시 후 다시 시도해 주세요."
+        : text.slice(0, 200) || "빈 응답을 받았습니다.",
+    };
   }
 }
 
+async function post(url: string, payload: object): Promise<any> {
+  // Content-Type 미지정(text/plain) → Apps Script CORS preflight 회피 (다른 호출부와 동일 패턴)
+  const res = await fetch(url, { method: "POST", body: JSON.stringify(payload) });
+  return parseJsonSafe(await res.text());
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function listLibraryFiles(webappUrl: string): Promise<LibraryFile[]> {
-  const res = await fetch(`${webappUrl}?type=list`);
-  const data = await res.json();
+  // Apps Script 가 간헐적으로 HTML 오류 페이지를 돌려줄 때가 있어(일시적 과부하 등)
+  // 곧바로 실패시키지 않고 짧게 두 번 더 시도한다.
+  let data: any = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`${webappUrl}?type=list`, { cache: "no-store" });
+    data = parseJsonSafe(await res.text());
+    if (data.ok) break;
+    if (attempt < 2) await sleep(800 * (attempt + 1));
+  }
   if (!data.ok) throw new Error(data.error || "목록을 불러오지 못했습니다.");
   return data.files as LibraryFile[];
 }
