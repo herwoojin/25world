@@ -4,6 +4,7 @@ import SiteFooter from "@/components/site-footer";
 import PwaRegister from "@/components/pwa-register";
 import AuthGate from "@/components/auth-gate";
 import ErrorBoundary from "@/components/error-boundary";
+import LoadingPopup from "@/components/loading-popup";
 import StarField from "@/components/star-field";
 import { NlmProvider } from "@/components/notebooklm/nlm-context";
 import { NotebookLMTray } from "@/components/notebooklm/notebooklm-tray";
@@ -46,6 +47,7 @@ export default function RootLayout({
           <AuthGate>
             <NlmProvider>
               <SiteHeader />
+              <LoadingPopup />
               {children}
               <SiteFooter />
               <NotebookLMTray />

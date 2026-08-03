@@ -36,6 +36,7 @@ import ActionMenu from "@/components/action-menu";
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
+import { beginLoading, endLoading } from "@/lib/loading-bus";
 import { fetchPostHtml, formatKST } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
 import {
@@ -102,11 +103,13 @@ async function webappPost(payload: object) {
 export default function BlogSection() {
   const [posts, setPosts] = useState<BlogPost[] | null>(null);
   // 섹션 접기 — 제목만 남기고 숨기기.
-  // 접은 상태는 sessionStorage 에만 기억한다 → 새로 접속(로그인)하면 항상 펼쳐진 채 시작.
-  const [collapsed, setCollapsed] = useState(false);
+  // 새로 접속(로그인)하면 항상 숨긴 채 시작 — 세션 중 직접 펼친 기록만
+  // sessionStorage 에 남아 있으면 그 상태를 존중한다.
+  const [collapsed, setCollapsed] = useState(true);
   useEffect(() => {
     try {
-      setCollapsed(sessionStorage.getItem("25world:blog-collapsed") === "1");
+      const v = sessionStorage.getItem("25world:blog-collapsed");
+      if (v !== null) setCollapsed(v === "1");
     } catch {}
   }, []);
   const toggleCollapsed = () => {
@@ -182,6 +185,7 @@ export default function BlogSection() {
   };
 
   const loadPosts = useCallback(() => {
+    beginLoading("blogPosts");
     return fetch(BLOG_WEBAPP_URL)
       .then((r) => r.json())
       .then((data: BlogPost[]) =>
@@ -191,12 +195,16 @@ export default function BlogSection() {
           )
         )
       )
-      .catch(() => setError("블로그 목록을 불러오지 못했습니다."));
+      .catch(() => setError("블로그 목록을 불러오지 못했습니다."))
+      .finally(() => endLoading("blogPosts"));
   }, []);
 
   useEffect(() => {
     loadPosts();
-    loadAllPreviews().then(setPreviews);
+    beginLoading("blogPreviews");
+    loadAllPreviews()
+      .then(setPreviews)
+      .finally(() => endLoading("blogPreviews"));
   }, [loadPosts]);
 
   const emptyPreview: Preview = {

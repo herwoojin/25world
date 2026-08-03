@@ -112,13 +112,17 @@ function loadDynamicSites(): Promise<Site[]> {
 
 /** 내장 + 동적 사이트 병합 목록 (관리자 설정: 카테고리 이동·정렬 반영) */
 export function useSites(): { sites: Site[]; dynamic: Site[] } {
-  // 캐시가 있으면 그 값으로 즉시 시작 (깜빡임 방지). 이 컴포넌트는 로그인
-  // 후 클라이언트에서만 렌더링되므로 SSR 시점에 localStorage 를 건드릴 일이 없다.
-  const [dynamic, setDynamic] = useState<Site[]>(readCachedDynamicSites);
+  // 로그인 전 화면(AuthGate)에서도 이 훅을 쓰기 때문에 정적 빌드 시점의
+  // 서버 렌더와 반드시 같은 값(빈 배열)으로 시작해야 한다 — 마운트 직후
+  // localStorage 캐시를 읽어 한 번, 최신 네트워크 응답으로 다시 한 번 갱신하면
+  // 깜빡임은 거의 없으면서도 하이드레이션 불일치(React #418/423/425)가 생기지 않는다.
+  const [dynamic, setDynamic] = useState<Site[]>([]);
   const cfg = useSiteConfig();
 
   useEffect(() => {
     let mounted = true;
+    const cached = readCachedDynamicSites();
+    if (cached.length) setDynamic(cached);
     loadDynamicSites().then((d) => {
       if (!mounted) return;
       setDynamic(d);

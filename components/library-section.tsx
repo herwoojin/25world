@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { getAdminKey, useAdminOn } from "@/components/admin-button";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { beginLoading, endLoading } from "@/lib/loading-bus";
 import { listUsers, useEffectiveGroup } from "@/lib/membership";
 import { useSiteConfig, saveSiteConfig } from "@/lib/site-config";
 import {
@@ -66,11 +67,13 @@ export default function LibrarySection() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 섹션 접기 — 제목만 남기고 숨기기.
-  // 접은 상태는 sessionStorage 에만 기억한다 → 새로 접속(로그인)하면 항상 펼쳐진 채 시작.
-  const [collapsed, setCollapsed] = useState(false);
+  // 새로 접속(로그인)하면 항상 숨긴 채 시작 — 세션 중 직접 펼친 기록만
+  // sessionStorage 에 남아 있으면 그 상태를 존중한다.
+  const [collapsed, setCollapsed] = useState(true);
   useEffect(() => {
     try {
-      setCollapsed(sessionStorage.getItem("25world:library-collapsed") === "1");
+      const v = sessionStorage.getItem("25world:library-collapsed");
+      if (v !== null) setCollapsed(v === "1");
     } catch {}
   }, []);
   const toggleCollapsed = () => {
@@ -86,11 +89,14 @@ export default function LibrarySection() {
   const load = useCallback(async () => {
     if (!url) return;
     setError("");
+    beginLoading("library");
     try {
       setFiles(await listLibraryFiles(url));
     } catch (e) {
       setFiles([]);
       setError(e instanceof Error ? e.message : "목록을 불러오지 못했습니다.");
+    } finally {
+      endLoading("library");
     }
   }, [url]);
 
