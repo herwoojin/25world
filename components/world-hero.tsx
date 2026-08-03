@@ -22,7 +22,7 @@ export default function WorldHero() {
 
       <div className="relative mx-auto max-w-4xl px-4 text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-          🌏 Vibe-coded Projects
+          🌏 AI네이티브, 사람은 병목은 휴먼루프 설계자!
         </span>
         <h1 className="mt-6 bg-gradient-to-r from-teal-300 via-sky-300 to-violet-300 bg-clip-text text-4xl font-bold tracking-tight text-transparent lg:text-6xl">
           25WORLD
