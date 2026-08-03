@@ -298,29 +298,40 @@ export default function CategoryOrbital({
                   닫기
                 </Button>
 
-                {/* GIT코드 · 프롬프트 — 유료회원 이상만 볼 수 있다 (관리자 모드는 항상 포함) */}
-                {paidUp && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setModal("git")}
-                      className="gap-1.5"
-                    >
-                      <Github className="h-3.5 w-3.5" aria-hidden="true" />
-                      GIT코드
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setModal("prompt")}
-                      className="gap-1.5"
-                    >
-                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                      프롬프트
-                    </Button>
-                  </>
-                )}
+                {/* GIT코드 · 프롬프트 — 버튼은 항상 보이되, 유료회원 미만은
+                    비활성화 상태로 두고 호버 시 안내 문구만 띄운다.
+                    (네이티브 disabled 는 pointer-events 를 꺼버려 호버 툴팁이
+                    안 뜨므로, aria-disabled + 클릭 무시로 대신 처리) */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => paidUp && setModal("git")}
+                  aria-disabled={!paidUp}
+                  title={paidUp ? undefined : "유료회원 이상만 볼 수 있어요"}
+                  className={`gap-1.5 ${
+                    paidUp
+                      ? ""
+                      : "cursor-not-allowed opacity-50 hover:bg-background hover:text-foreground"
+                  }`}
+                >
+                  <Github className="h-3.5 w-3.5" aria-hidden="true" />
+                  GIT코드
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => paidUp && setModal("prompt")}
+                  aria-disabled={!paidUp}
+                  title={paidUp ? undefined : "유료회원 이상만 볼 수 있어요"}
+                  className={`gap-1.5 ${
+                    paidUp
+                      ? ""
+                      : "cursor-not-allowed opacity-50 hover:bg-background hover:text-foreground"
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                  프롬프트
+                </Button>
               </div>
 
               {/* 핵심 내용 메모 — 관리자 전용 작업 노트 (VIP 게이팅 아님) */}
