@@ -434,7 +434,7 @@ export default function CategoryOrbital({
             {/* 중심 허브 — 클릭하면 에이전트 협업 연출(순수 시각 효과, 연동테스트중) */}
             <div
               aria-hidden="true"
-              className={`absolute h-16 w-16 rounded-full blur-md transition-opacity ${
+              className={`pointer-events-none absolute h-16 w-16 rounded-full blur-md transition-opacity ${
                 collabActive ? "animate-pulse opacity-80" : "opacity-50"
               }`}
               style={{
@@ -453,7 +453,7 @@ export default function CategoryOrbital({
               disabled={collabActive}
               aria-label={`${category.name} 에이전트 협업 연출 시작 (연동테스트중)`}
               title="클릭하면 에이전트들이 협업하는 모습을 보여줘요 (연동테스트중 — 실제 자동화 아님)"
-              className={`absolute flex h-10 w-10 items-center justify-center rounded-full text-2xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default ${
+              className={`absolute z-[250] flex h-10 w-10 items-center justify-center rounded-full text-2xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default ${
                 collabActive ? "" : "hover:scale-125"
               }`}
               style={{ left: -20, top: -20 }}
@@ -461,10 +461,12 @@ export default function CategoryOrbital({
               {category.emoji}
             </button>
 
-            {/* 궤도 링 — 중심점 기준 정확한 원 (협업 연출 중엔 카테고리 색으로 은은하게 빛남) */}
+            {/* 궤도 링 — 중심점 기준 정확한 원 (협업 연출 중엔 카테고리 색으로 은은하게 빛남).
+                z-index 없는 장식용 div 라 pointer-events-none 이 없으면 투명한 원
+                전체가 클릭을 가로채 가운데 허브 버튼이 눌리지 않는 문제가 있었다. */}
             <div
               aria-hidden="true"
-              className={`absolute rounded-full border border-dashed transition-colors duration-500 ${
+              className={`pointer-events-none absolute rounded-full border border-dashed transition-colors duration-500 ${
                 collabActive ? "animate-pulse" : "border-foreground/15"
               }`}
               style={{
