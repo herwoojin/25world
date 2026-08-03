@@ -479,17 +479,21 @@ export default function CategoryOrbital({
 
               return (
                 <Fragment key={site.id}>
-                  {/* 협업 연출 입자 — 허브(0,0)에서 이 노드 좌표까지 튀어나갔다 사라진다 */}
+                  {/* 협업 연출 입자 — 허브(0,0)에서 이 노드 좌표까지 튀어나갔다 사라진다.
+                      zIndex 를 노드(최대 200)보다 높게 줘야 아이콘 뒤에 가려지지 않는다. */}
                   {collabActive && !lockedNode && (
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute h-2 w-2 rounded-full opacity-0"
+                      className="pointer-events-none absolute rounded-full"
                       style={
                         {
-                          left: -4,
-                          top: -4,
+                          left: -5,
+                          top: -5,
+                          width: 10,
+                          height: 10,
+                          zIndex: 999,
                           backgroundColor: category.color,
-                          boxShadow: `0 0 10px 2px ${category.color}`,
+                          boxShadow: `0 0 14px 4px ${category.color}`,
                           animation: `agent-particle-travel 1.3s ease-in-out ${(i * 0.18).toFixed(2)}s infinite`,
                           "--px": `${x}px`,
                           "--py": `${y}px`,

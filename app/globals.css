@@ -186,17 +186,20 @@
    실제 자동화가 아니라 진행 중임을 보여주는 시각 연출이다. */
 @keyframes agent-particle-travel {
   0% {
-    transform: translate(0, 0);
+    transform: translate(0, 0) scale(0.4);
     opacity: 0;
   }
-  15% {
+  12% {
+    transform: translate(calc(var(--px, 0px) * 0.12), calc(var(--py, 0px) * 0.12))
+      scale(1.2);
     opacity: 1;
   }
   85% {
+    transform: translate(var(--px, 0px), var(--py, 0px)) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translate(var(--px, 0px), var(--py, 0px));
+    transform: translate(var(--px, 0px), var(--py, 0px)) scale(0.6);
     opacity: 0;
   }
 }
