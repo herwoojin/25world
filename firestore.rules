@@ -37,6 +37,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // 사이트별 부가 자료 — GIT 코드 주소·프롬프트(MD) 원문 (siteResources/{siteId})
+    match /siteResources/{siteId} {
+      allow read, write: if true;
+    }
+
     // 음성(TTS) 메타·조각·큐
     match /audio/{key} {
       allow read, write: if true;

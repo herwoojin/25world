@@ -11,10 +11,27 @@
 //   ring: left/top = -R, 크기 2R  → 중심점에 정확히 일치
 //   node: left/top = -24, 크기 48 → 중심점에 일치 후 translate(x,y) 로 궤도 위에 놓임
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ExternalLink, MousePointer2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  FileText,
+  Github,
+  MousePointer2,
+  Upload,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
+import { useAdminOn } from "@/components/admin-button";
+import { useEffectiveGroup } from "@/lib/membership";
+import {
+  saveSiteGitUrl,
+  saveSitePrompt,
+  siteResource,
+  useSiteResources,
+} from "@/lib/site-resources";
 import type { Category, Site } from "@/lib/sites";
 
 interface CategoryOrbitalProps {
@@ -44,6 +61,24 @@ export default function CategoryOrbital({
   const sceneRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; a: number } | null>(null);
   const moved = useRef(false);
+
+  // GIT 코드 / 프롬프트(MD) 부가 자료 — 열람은 유료회원 이상, 업로드는 관리자만
+  const resMap = useSiteResources();
+  const group = useEffectiveGroup();
+  const adminOn = useAdminOn();
+  const paidUp = group === "paid" || group === "vip" || group === "admin";
+  const [modal, setModal] = useState<"git" | "prompt" | null>(null);
+  const [gitDraft, setGitDraft] = useState("");
+  const [gitBusy, setGitBusy] = useState(false);
+  const [promptBusy, setPromptBusy] = useState("");
+  const [copied, setCopied] = useState(false);
+  const promptFileRef = useRef<HTMLInputElement>(null);
+
+  // 사이트 선택/해제 시 열려 있던 자료 팝업도 함께 닫는다
+  const selectSite = (id: string | null) => {
+    setActiveId(id);
+    setModal(null);
+  };
 
   // 씬 크기에 맞춰 궤도 반지름 조정 — 라벨이 잘리지 않도록 여백 확보
   useEffect(() => {
@@ -95,7 +130,54 @@ export default function CategoryOrbital({
   };
 
   const active = sites.find((s) => s.id === activeId) ?? null;
+  const activeRes = active ? siteResource(resMap, active.id) : null;
   const step = 360 / Math.max(1, sites.length);
+
+  // GIT 모달을 열 때 입력값을 현재 저장된 주소로 채운다
+  useEffect(() => {
+    if (modal === "git" && active) {
+      setGitDraft(siteResource(resMap, active.id).gitUrl);
+    }
+    // resMap 은 의도적으로 제외 — 관리자가 입력 중일 때 다시 채워지지 않게 한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal, active?.id]);
+
+  const saveGit = async () => {
+    if (!active) return;
+    setGitBusy(true);
+    try {
+      await saveSiteGitUrl(active.id, gitDraft);
+    } catch {
+      window.alert("GIT 코드 저장에 실패했습니다.");
+    } finally {
+      setGitBusy(false);
+    }
+  };
+
+  const onPromptFile = async (file: File | undefined) => {
+    if (!file || !active) return;
+    setPromptBusy(`"${file.name}" 저장 중…`);
+    try {
+      const text = await file.text();
+      await saveSitePrompt(active.id, text, file.name);
+    } catch {
+      window.alert("프롬프트 저장에 실패했습니다.");
+    } finally {
+      setPromptBusy("");
+      if (promptFileRef.current) promptFileRef.current.value = "";
+    }
+  };
+
+  const copyPrompt = async () => {
+    if (!activeRes?.promptMd) return;
+    try {
+      await navigator.clipboard.writeText(activeRes.promptMd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.alert("복사에 실패했습니다.");
+    }
+  };
 
   return (
     <div
@@ -153,9 +235,33 @@ export default function CategoryOrbital({
                     <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   </a>
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setActiveId(null)}>
+                <Button size="sm" variant="outline" onClick={() => selectSite(null)}>
                   닫기
                 </Button>
+
+                {/* GIT코드 · 프롬프트 — 유료회원 이상만 볼 수 있다 (관리자 모드는 항상 포함) */}
+                {paidUp && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setModal("git")}
+                      className="gap-1.5"
+                    >
+                      <Github className="h-3.5 w-3.5" aria-hidden="true" />
+                      GIT코드
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setModal("prompt")}
+                      className="gap-1.5"
+                    >
+                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                      프롬프트
+                    </Button>
+                  </>
+                )}
               </div>
             </>
           ) : (
@@ -261,7 +367,7 @@ export default function CategoryOrbital({
                     onClick={() => {
                       if (moved.current) return; // 드래그 직후의 클릭은 무시
                       if (lockedNode) return; // 잠금: 일반회원은 클릭 불가
-                      setActiveId(isActive ? null : site.id);
+                      selectSite(isActive ? null : site.id);
                     }}
                     className={`flex h-full w-full items-center justify-center rounded-full border-2 bg-white shadow-md transition-transform duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none dark:bg-zinc-200 ${
                       lockedNode ? "cursor-not-allowed" : "hover:scale-110"
@@ -307,6 +413,156 @@ export default function CategoryOrbital({
           </div>
         </div>
       </div>
+
+      {/* GIT코드 팝업 */}
+      {modal === "git" && active && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${active.name} GIT 코드`}
+          onClick={() => setModal(null)}
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-background p-5 shadow-2xl dark:border-zinc-800"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="flex min-w-0 items-center gap-2 text-sm font-bold">
+                <Github className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{active.name} — GIT 코드</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                aria-label="닫기"
+                className="shrink-0 rounded p-1 text-zinc-400 transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            {adminOn && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <input
+                  type="url"
+                  value={gitDraft}
+                  onChange={(e) => setGitDraft(e.target.value)}
+                  placeholder="https://github.com/..."
+                  className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
+                />
+                <Button size="sm" onClick={saveGit} disabled={gitBusy}>
+                  {gitBusy ? "저장 중…" : "저장"}
+                </Button>
+              </div>
+            )}
+
+            {activeRes?.gitUrl ? (
+              <div className="mt-4 flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <span className="min-w-0 flex-1 select-all truncate">
+                  {activeRes.gitUrl}
+                </span>
+                <a
+                  href={activeRes.gitUrl}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label="새 탭에서 열기"
+                  className="shrink-0 text-zinc-400 transition-colors hover:text-foreground"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </a>
+              </div>
+            ) : (
+              !adminOn && (
+                <p className="mt-4 text-sm text-zinc-500">
+                  아직 등록된 GIT 코드 주소가 없습니다.
+                </p>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 프롬프트(MD) 팝업 */}
+      {modal === "prompt" && active && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${active.name} 프롬프트`}
+          onClick={() => setModal(null)}
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl border border-zinc-200 bg-background p-5 shadow-2xl dark:border-zinc-800"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="flex min-w-0 items-center gap-2 text-sm font-bold">
+                <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{active.name} — 프롬프트</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                aria-label="닫기"
+                className="shrink-0 rounded p-1 text-zinc-400 transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            {adminOn && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-4 dark:border-zinc-800">
+                <input
+                  ref={promptFileRef}
+                  type="file"
+                  accept=".md,text/markdown"
+                  onChange={(e) => onPromptFile(e.target.files?.[0])}
+                  className="hidden"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => promptFileRef.current?.click()}
+                  disabled={Boolean(promptBusy)}
+                  className="gap-1.5"
+                >
+                  <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                  .md 파일 업로드
+                </Button>
+                <span className="text-xs text-zinc-500">
+                  {promptBusy ||
+                    (activeRes?.promptFileName
+                      ? `현재: ${activeRes.promptFileName}`
+                      : "등록된 파일 없음")}
+                </span>
+              </div>
+            )}
+
+            {activeRes?.promptMd ? (
+              <>
+                <pre className="mt-4 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed dark:border-zinc-800 dark:bg-zinc-900">
+                  {activeRes.promptMd}
+                </pre>
+                <Button size="sm" className="mt-3 w-fit gap-1.5" onClick={copyPrompt}>
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {copied ? "복사됨!" : "복사"}
+                </Button>
+              </>
+            ) : (
+              !adminOn && (
+                <p className="mt-4 text-sm text-zinc-500">
+                  아직 등록된 프롬프트가 없습니다.
+                </p>
+              )
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

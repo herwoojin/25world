@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-08-02",
+  "lastUpdated": "2026-08-04",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -151,6 +151,11 @@
           "name": "Firestore previews/{id}",
           "purpose": "블로그 글 미리보기(첫 이미지·제목·카테고리) + 관리자 지정 유료 전용 플래그(paid) — 글별 VIP 게이팅 근거",
           "config": "lib/previews.ts"
+        },
+        {
+          "name": "Firestore siteResources/{siteId}",
+          "purpose": "사이트별 GIT 코드 주소·프롬프트(MD) 원문 — 사이트 상세 팝업의 GIT코드/프롬프트 버튼 데이터. 열람은 유료회원 이상, 업로드는 관리자만",
+          "config": "lib/site-resources.ts, components/category-orbital.tsx"
         }
       ]
     },
