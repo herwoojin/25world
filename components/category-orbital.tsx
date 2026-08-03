@@ -10,7 +10,13 @@
 //   flex 중앙정렬 + translate -50% 를 겹쳐 쓰면 요소 크기의 절반만큼 어긋난다.
 //   ring: left/top = -R, 크기 2R  → 중심점에 정확히 일치
 //   node: left/top = -24, 크기 48 → 중심점에 일치 후 translate(x,y) 로 궤도 위에 놓임
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   Check,
   Copy,
@@ -27,6 +33,7 @@ import { Spotlight } from "@/components/ui/spotlight";
 import { useAdminOn } from "@/components/admin-button";
 import { useEffectiveGroup } from "@/lib/membership";
 import {
+  saveSiteCoreNote,
   saveSiteGitUrl,
   saveSitePrompt,
   siteResource,
@@ -73,11 +80,37 @@ export default function CategoryOrbital({
   const [promptBusy, setPromptBusy] = useState("");
   const [copied, setCopied] = useState(false);
   const promptFileRef = useRef<HTMLInputElement>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+
+  // 허브 클릭 → "에이전트 협업" 연출 (실제 자동화 아님 — 연동테스트중 시각 효과)
+  const [collabActive, setCollabActive] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
+  const collabTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (collabTimer.current) clearTimeout(collabTimer.current);
+    },
+    [],
+  );
 
   // 사이트 선택/해제 시 열려 있던 자료 팝업도 함께 닫는다
   const selectSite = (id: string | null) => {
     setActiveId(id);
     setModal(null);
+  };
+
+  const startCollab = () => {
+    if (collabActive) return;
+    selectSite(null);
+    if (collabTimer.current) clearTimeout(collabTimer.current);
+    setJustFinished(false);
+    setCollabActive(true);
+    collabTimer.current = setTimeout(() => {
+      setCollabActive(false);
+      setJustFinished(true);
+      collabTimer.current = setTimeout(() => setJustFinished(false), 1800);
+    }, 4200);
   };
 
   // 씬 크기에 맞춰 궤도 반지름 조정 — 라벨이 잘리지 않도록 여백 확보
@@ -95,9 +128,10 @@ export default function CategoryOrbital({
     return () => ro.disconnect();
   }, []);
 
-  // 자동 회전 — 드래그 중 / 노드 선택 중 / reduced-motion 이면 정지
+  // 자동 회전 — 드래그 중 / 노드 선택 중 / 협업 연출 중 / reduced-motion 이면 정지
+  // (협업 연출 중엔 궤도를 고정해야 입자가 정확한 노드 좌표로 날아간다)
   useEffect(() => {
-    if (dragging || activeId) return;
+    if (dragging || activeId || collabActive) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     let last = performance.now();
@@ -109,7 +143,7 @@ export default function CategoryOrbital({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [dragging, activeId]);
+  }, [dragging, activeId, collabActive]);
 
   // 드래그로 궤도 직접 회전
   const onPointerDown = (e: React.PointerEvent) => {
@@ -141,6 +175,24 @@ export default function CategoryOrbital({
     // resMap 은 의도적으로 제외 — 관리자가 입력 중일 때 다시 채워지지 않게 한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modal, active?.id]);
+
+  // 사이트를 선택하면 그 사이트의 저장된 메모로 입력창을 채운다
+  useEffect(() => {
+    if (active) setNoteDraft(siteResource(resMap, active.id).coreNote);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id]);
+
+  const saveNote = async () => {
+    if (!active) return;
+    setNoteBusy(true);
+    try {
+      await saveSiteCoreNote(active.id, noteDraft);
+    } catch {
+      window.alert("메모 저장에 실패했습니다.");
+    } finally {
+      setNoteBusy(false);
+    }
+  };
 
   const saveGit = async () => {
     if (!active) return;
@@ -232,10 +284,17 @@ export default function CategoryOrbital({
                     aria-label={`${active.name} 방문하기 (새 탭)`}
                   >
                     방문하기
-                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    <ExternalLink
+                      className="ml-1.5 h-3.5 w-3.5"
+                      aria-hidden="true"
+                    />
                   </a>
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => selectSite(null)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => selectSite(null)}
+                >
                   닫기
                 </Button>
 
@@ -263,6 +322,60 @@ export default function CategoryOrbital({
                   </>
                 )}
               </div>
+
+              {/* 핵심 내용 메모 — 관리자 전용 작업 노트 (VIP 게이팅 아님) */}
+              {adminOn && (
+                <div className="mt-4 max-w-md">
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    핵심 내용 메모 (관리자 전용)
+                  </label>
+                  <textarea
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    rows={3}
+                    placeholder="이 사이트의 핵심 기능·소구 포인트를 적어 두세요"
+                    className="w-full resize-y rounded-md border border-zinc-300 bg-background px-3 py-2 text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5"
+                    onClick={saveNote}
+                    disabled={noteBusy}
+                  >
+                    {noteBusy ? "저장 중…" : "메모 저장"}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : collabActive ? (
+            <>
+              <h3 className="flex items-center gap-3 text-3xl font-bold tracking-tight md:text-4xl">
+                <span aria-hidden="true" className="animate-pulse text-3xl">
+                  🤖
+                </span>
+                협업 진행 중…
+                <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                  연동테스트중
+                </span>
+              </h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+                {sites.length}개 사이트에 대해 에이전트들이 동시에 작업하는
+                모습을 보여주는 연출이에요. 실제 자동화가 아니라 진행 상황을
+                시각화한 것입니다.
+              </p>
+            </>
+          ) : justFinished ? (
+            <>
+              <h3 className="flex items-center gap-3 text-3xl font-bold tracking-tight md:text-4xl">
+                <span aria-hidden="true" className="text-3xl">
+                  ✅
+                </span>
+                협업 완료!
+              </h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+                모든 에이전트가 작업을 마쳤어요.
+              </p>
             </>
           ) : (
             <>
@@ -273,12 +386,20 @@ export default function CategoryOrbital({
                 {category.name}
               </h3>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-                이 카테고리에 {sites.length}개의 사이트가 있습니다. 궤도를 드래그해
-                돌려보고, 아이콘을 클릭하면 상세 정보가 여기에 나타납니다.
+                이 카테고리에 {sites.length}개의 사이트가 있습니다. 궤도를
+                드래그해 돌려보고, 아이콘을 클릭하면 상세 정보가 여기에
+                나타납니다.
               </p>
               <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground/70">
                 <MousePointer2 className="h-3.5 w-3.5" aria-hidden="true" />
                 드래그로 회전 · 클릭으로 열기
+              </p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                <span aria-hidden="true">🤖</span>
+                가운데 아이콘을 클릭하면 에이전트 협업 연출을 볼 수 있어요
+                <span className="rounded bg-zinc-200 px-1 py-0.5 text-[9px] font-bold leading-none text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+                  연동테스트중
+                </span>
               </p>
             </>
           )}
@@ -299,33 +420,48 @@ export default function CategoryOrbital({
         >
           {/* 중심점(stage) — 크기 0. 모든 좌표의 기준이 된다 */}
           <div className="absolute left-1/2 top-1/2 h-0 w-0">
-            {/* 중심 허브 */}
+            {/* 중심 허브 — 클릭하면 에이전트 협업 연출(순수 시각 효과, 연동테스트중) */}
             <div
               aria-hidden="true"
-              className="absolute h-16 w-16 rounded-full opacity-50 blur-md"
+              className={`absolute h-16 w-16 rounded-full blur-md transition-opacity ${
+                collabActive ? "animate-pulse opacity-80" : "opacity-50"
+              }`}
               style={{
                 left: -32,
                 top: -32,
                 background: `radial-gradient(circle, ${category.color}, transparent 70%)`,
               }}
             />
-            <span
-              aria-hidden="true"
-              className="absolute flex h-10 w-10 items-center justify-center text-2xl"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                startCollab();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              disabled={collabActive}
+              aria-label={`${category.name} 에이전트 협업 연출 시작 (연동테스트중)`}
+              title="클릭하면 에이전트들이 협업하는 모습을 보여줘요 (연동테스트중 — 실제 자동화 아님)"
+              className={`absolute flex h-10 w-10 items-center justify-center rounded-full text-2xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default ${
+                collabActive ? "" : "hover:scale-125"
+              }`}
               style={{ left: -20, top: -20 }}
             >
               {category.emoji}
-            </span>
+            </button>
 
-            {/* 궤도 링 — 중심점 기준 정확한 원 */}
+            {/* 궤도 링 — 중심점 기준 정확한 원 (협업 연출 중엔 카테고리 색으로 은은하게 빛남) */}
             <div
               aria-hidden="true"
-              className="absolute rounded-full border border-dashed border-foreground/15"
+              className={`absolute rounded-full border border-dashed transition-colors duration-500 ${
+                collabActive ? "animate-pulse" : "border-foreground/15"
+              }`}
               style={{
                 left: -radius,
                 top: -radius,
                 width: radius * 2,
                 height: radius * 2,
+                borderColor: collabActive ? `${category.color}88` : undefined,
               }}
             />
 
@@ -342,72 +478,97 @@ export default function CategoryOrbital({
               const scale = isActive ? 1.25 : 0.86 + 0.14 * front;
 
               return (
-                <div
-                  key={site.id}
-                  className="absolute"
-                  style={{
-                    left: -NODE / 2,
-                    top: -NODE / 2,
-                    width: NODE,
-                    height: NODE,
-                    transform: `translate(${x}px, ${y}px)`,
-                    zIndex: isActive ? 200 : Math.round(100 + 50 * Math.sin(a)),
-                    opacity: isActive ? 1 : 0.5 + 0.5 * front,
-                  }}
-                >
-                  <button
-                    type="button"
-                    aria-expanded={isActive}
-                    aria-disabled={lockedNode}
-                    aria-label={
-                      lockedNode
-                        ? `${site.name} — 유료회원 전용`
-                        : `${site.name} — ${site.desc}`
-                    }
-                    onClick={() => {
-                      if (moved.current) return; // 드래그 직후의 클릭은 무시
-                      if (lockedNode) return; // 잠금: 일반회원은 클릭 불가
-                      selectSite(isActive ? null : site.id);
-                    }}
-                    className={`flex h-full w-full items-center justify-center rounded-full border-2 bg-white shadow-md transition-transform duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none dark:bg-zinc-200 ${
-                      lockedNode ? "cursor-not-allowed" : "hover:scale-110"
-                    }`}
-                    style={{
-                      color: category.color,
-                      borderColor: isActive ? category.color : `${category.color}66`,
-                      transform: `scale(${scale})`,
-                      opacity: lockedNode ? 0.55 : undefined,
-                      boxShadow: isActive ? `0 0 28px -4px ${category.color}` : undefined,
-                    }}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-6 w-6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                <Fragment key={site.id}>
+                  {/* 협업 연출 입자 — 허브(0,0)에서 이 노드 좌표까지 튀어나갔다 사라진다 */}
+                  {collabActive && !lockedNode && (
+                    <span
                       aria-hidden="true"
-                      dangerouslySetInnerHTML={{ __html: site.icon }}
+                      className="pointer-events-none absolute h-2 w-2 rounded-full opacity-0"
+                      style={
+                        {
+                          left: -4,
+                          top: -4,
+                          backgroundColor: category.color,
+                          boxShadow: `0 0 10px 2px ${category.color}`,
+                          animation: `agent-particle-travel 1.3s ease-in-out ${(i * 0.18).toFixed(2)}s infinite`,
+                          "--px": `${x}px`,
+                          "--py": `${y}px`,
+                        } as CSSProperties
+                      }
                     />
-                  </button>
-
-                  {/* 라벨 — 노드 박스 기준 아래 중앙 (레이아웃에 영향 없음) */}
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute left-1/2 top-[52px] flex max-w-[124px] -translate-x-1/2 items-center justify-center gap-1 whitespace-nowrap text-[11px] font-bold tracking-wide transition-colors sm:max-w-none sm:text-sm ${
-                      isActive ? "text-foreground" : "text-foreground/80"
-                    }`}
+                  )}
+                  <div
+                    className="absolute"
+                    style={{
+                      left: -NODE / 2,
+                      top: -NODE / 2,
+                      width: NODE,
+                      height: NODE,
+                      transform: `translate(${x}px, ${y}px)`,
+                      zIndex: isActive
+                        ? 200
+                        : Math.round(100 + 50 * Math.sin(a)),
+                      opacity: isActive ? 1 : 0.5 + 0.5 * front,
+                    }}
                   >
-                    <span className="truncate">{site.name}</span>
-                    {isPaidOnly(site.id) && (
-                      <span className="shrink-0 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-extrabold leading-none text-black">
-                        VIP
-                      </span>
-                    )}
-                  </span>
-                </div>
+                    <button
+                      type="button"
+                      aria-expanded={isActive}
+                      aria-disabled={lockedNode}
+                      aria-label={
+                        lockedNode
+                          ? `${site.name} — 유료회원 전용`
+                          : `${site.name} — ${site.desc}`
+                      }
+                      onClick={() => {
+                        if (moved.current) return; // 드래그 직후의 클릭은 무시
+                        if (lockedNode) return; // 잠금: 일반회원은 클릭 불가
+                        selectSite(isActive ? null : site.id);
+                      }}
+                      className={`flex h-full w-full items-center justify-center rounded-full border-2 bg-white shadow-md transition-transform duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none dark:bg-zinc-200 ${
+                        lockedNode ? "cursor-not-allowed" : "hover:scale-110"
+                      }`}
+                      style={{
+                        color: category.color,
+                        borderColor: isActive
+                          ? category.color
+                          : `${category.color}66`,
+                        transform: `scale(${scale})`,
+                        opacity: lockedNode ? 0.55 : undefined,
+                        boxShadow: isActive
+                          ? `0 0 28px -4px ${category.color}`
+                          : undefined,
+                      }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-6 w-6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{ __html: site.icon }}
+                      />
+                    </button>
+
+                    {/* 라벨 — 노드 박스 기준 아래 중앙 (레이아웃에 영향 없음) */}
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute left-1/2 top-[52px] flex max-w-[124px] -translate-x-1/2 items-center justify-center gap-1 whitespace-nowrap text-[11px] font-bold tracking-wide transition-colors sm:max-w-none sm:text-sm ${
+                        isActive ? "text-foreground" : "text-foreground/80"
+                      }`}
+                    >
+                      <span className="truncate">{site.name}</span>
+                      {isPaidOnly(site.id) && (
+                        <span className="shrink-0 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-extrabold leading-none text-black">
+                          VIP
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </Fragment>
               );
             })}
           </div>
@@ -544,7 +705,11 @@ export default function CategoryOrbital({
                 <pre className="mt-4 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed dark:border-zinc-800 dark:bg-zinc-900">
                   {activeRes.promptMd}
                 </pre>
-                <Button size="sm" className="mt-3 w-fit gap-1.5" onClick={copyPrompt}>
+                <Button
+                  size="sm"
+                  className="mt-3 w-fit gap-1.5"
+                  onClick={copyPrompt}
+                >
                   {copied ? (
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                   ) : (

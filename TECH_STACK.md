@@ -37,7 +37,8 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭 (Apps Script v3) |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상, 업로드·삭제·VIP지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`setVip`→스크립트 속성 `VIP_FILES`), 다운로드 차단은 서버 검증 |
-| 사이트별 부가 자료 (GIT코드·프롬프트) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
+| 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
+| 에이전트 협업 연출 **(연동테스트중)** | — | 카테고리 궤도 중앙 허브 클릭 → 각 사이트로 입자가 튀는 애니메이션 | `components/category-orbital.tsx`, `app/globals.css`(`agent-particle-travel`) | **실제 자동화 없음** — 순수 CSS 시각 연출. 4.2초간 재생 후 "완료!" 표시, 재생 중 궤도 회전은 정지 |
 | Netlify | — | 호스팅 | — | Build `npm run build` / Publish `out` |
 
 ## 왜 이 선택인가

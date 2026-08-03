@@ -180,3 +180,23 @@
       "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   }
 }
+
+/* 카테고리 궤도 허브 — "에이전트 협업" 연출용 입자.
+   허브(중심, 0,0)에서 각 노드의 좌표(--px,--py)까지 튀어나갔다 사라진다.
+   실제 자동화가 아니라 진행 중임을 보여주는 시각 연출이다. */
+@keyframes agent-particle-travel {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--px, 0px), var(--py, 0px));
+    opacity: 0;
+  }
+}

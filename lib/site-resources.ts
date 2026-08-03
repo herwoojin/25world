@@ -14,6 +14,8 @@ export interface SiteResource {
   gitUrl: string;
   promptMd: string;
   promptFileName: string;
+  /** 관리자 전용 작업 메모 — 이 사이트의 핵심 내용을 적어 두는 곳 */
+  coreNote: string;
   updatedAt: number;
 }
 
@@ -21,6 +23,7 @@ const EMPTY: SiteResource = {
   gitUrl: "",
   promptMd: "",
   promptFileName: "",
+  coreNote: "",
   updatedAt: 0,
 };
 
@@ -43,6 +46,7 @@ function loadAll(force = false): Promise<Record<string, SiteResource>> {
           gitUrl: v.gitUrl ?? "",
           promptMd: v.promptMd ?? "",
           promptFileName: v.promptFileName ?? "",
+          coreNote: v.coreNote ?? "",
           updatedAt: v.updatedAt ?? 0,
         };
       });
@@ -82,6 +86,17 @@ export async function saveSiteGitUrl(siteId: string, gitUrl: string): Promise<vo
   await setDoc(
     doc(db(), "siteResources", siteId),
     { gitUrl: gitUrl.trim(), updatedAt: Date.now() },
+    { merge: true }
+  );
+  cache = null;
+  window.dispatchEvent(new Event(SITE_RESOURCES_EVENT));
+}
+
+/** 관리자: 핵심 내용 메모 저장 */
+export async function saveSiteCoreNote(siteId: string, coreNote: string): Promise<void> {
+  await setDoc(
+    doc(db(), "siteResources", siteId),
+    { coreNote, updatedAt: Date.now() },
     { merge: true }
   );
   cache = null;

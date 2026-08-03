@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-08-04",
+  "lastUpdated": "2026-08-05",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -57,6 +57,11 @@
           "name": "테마 시스템",
           "purpose": "주간/야간(기본)/E-ink 3모드 — html 클래스 + localStorage('25world:theme'), 페인트 전 인라인 스크립트로 복원. 로그인 사용자는 Firestore users/{uid}.theme 로 기기 간 동기화(onAuthStateChanged 시점 반영)",
           "config": "components/theme-switcher.tsx, app/globals.css(.paper), lib/membership.ts(saveUserTheme/loadUserTheme)"
+        },
+        {
+          "name": "에이전트 협업 연출 (연동테스트중)",
+          "purpose": "카테고리 궤도 중앙 허브 클릭 시 각 사이트로 입자가 튀는 애니메이션 — 실제 자동화 없는 순수 시각 연출. CSS keyframe(agent-particle-travel)",
+          "config": "components/category-orbital.tsx, app/globals.css"
         }
       ]
     },
@@ -154,7 +159,7 @@
         },
         {
           "name": "Firestore siteResources/{siteId}",
-          "purpose": "사이트별 GIT 코드 주소·프롬프트(MD) 원문 — 사이트 상세 팝업의 GIT코드/프롬프트 버튼 데이터. 열람은 유료회원 이상, 업로드는 관리자만",
+          "purpose": "사이트별 GIT 코드 주소·프롬프트(MD) 원문·관리자 메모(coreNote) — 사이트 상세 팝업 데이터. GIT/프롬프트 열람은 유료회원 이상, 메모·업로드는 관리자만",
           "config": "lib/site-resources.ts, components/category-orbital.tsx"
         }
       ]
