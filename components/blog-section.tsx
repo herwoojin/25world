@@ -69,6 +69,7 @@ const VIEW_KEY = "25world:blogView";
 const SORT_KEY = "25world:blogSort";
 
 const formatDate = formatKST;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function escapeHtml(s: string) {
   return s
@@ -184,19 +185,42 @@ export default function BlogSection() {
     } catch {}
   };
 
-  const loadPosts = useCallback(() => {
+  const loadPosts = useCallback(async () => {
+    setError("");
     beginLoading("blogPosts");
-    return fetch(BLOG_WEBAPP_URL)
-      .then((r) => r.json())
-      .then((data: BlogPost[]) =>
+    let lastErr: unknown = null;
+    // Apps Script 는 script.google.com → script.googleusercontent.com 리다이렉트를
+    // 타고 콜드스타트도 있어 간헐적으로 느리거나 실패한다. 짧게 몇 번 더 시도한다.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(BLOG_WEBAPP_URL, { cache: "no-store" });
+        const text = await res.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(
+            /^\s*</.test(text)
+              ? "구글 서버가 일시적으로 응답하지 못했습니다."
+              : "잘못된 응답을 받았습니다."
+          );
+        }
+        if (!Array.isArray(data)) throw new Error("예상치 못한 응답 형식입니다.");
         setPosts(
-          (Array.isArray(data) ? data : []).sort((a, b) =>
-            a.savedAt < b.savedAt ? 1 : -1
-          )
-        )
-      )
-      .catch(() => setError("블로그 목록을 불러오지 못했습니다."))
-      .finally(() => endLoading("blogPosts"));
+          (data as BlogPost[]).sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1))
+        );
+        endLoading("blogPosts");
+        return;
+      } catch (e) {
+        lastErr = e;
+        if (attempt < 2) await sleep(700 * (attempt + 1));
+      }
+    }
+    console.error("[blog] 목록을 불러오지 못했습니다:", lastErr);
+    setError(
+      lastErr instanceof Error ? lastErr.message : "블로그 목록을 불러오지 못했습니다."
+    );
+    endLoading("blogPosts");
   }, []);
 
   useEffect(() => {
