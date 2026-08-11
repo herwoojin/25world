@@ -8,10 +8,15 @@ import { Volume2, Play, Pause, Loader2 } from "lucide-react";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 import { BOT_SERVER_URL, getFirebaseApp } from "@/lib/firebase";
 
-type Voice = "male" | "female";
+// 무료 엔진(Edge TTS)이 지금 지원하는 한국어 음성 전부 — tts.js 의 VOICES 와 키를 맞춘다
+type Voice = "female" | "male" | "male2";
 type Status = "idle" | "loading" | "generating" | "ready" | "error";
 
-const SPEEDS = [1, 1.5, 2] as const;
+const VOICE_OPTIONS: { key: Voice; label: string }[] = [
+  { key: "female", label: "여성" },
+  { key: "male", label: "남성" },
+  { key: "male2", label: "남성2" },
+];
 
 // 한 번에 하나의 글만 재생 (다른 글 재생 시 이전 오디오 정지)
 let currentAudio: HTMLAudioElement | null = null;
@@ -99,7 +104,7 @@ export default function PostAudio({
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title,
-        artist: voice === "male" ? "남성 아나운서" : "여성 아나운서",
+        artist: `${VOICE_OPTIONS.find((o) => o.key === voice)?.label ?? ""} 아나운서`,
         album: "25WORLD 블로그",
       });
       navigator.mediaSession.setActionHandler("play", () => audio.play());
@@ -164,8 +169,7 @@ export default function PostAudio({
     }
   };
 
-  const changeSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speed as 1) + 1) % SPEEDS.length];
+  const changeSpeed = (next: number) => {
     setSpeed(next);
     if (audioRef.current) audioRef.current.playbackRate = next;
   };
@@ -244,33 +248,40 @@ export default function PostAudio({
                 className="h-1.5 min-w-[140px] flex-1 cursor-pointer appearance-none rounded-full bg-zinc-300 accent-sky-500 dark:bg-zinc-700"
               />
 
-              <button
-                type="button"
-                onClick={changeSpeed}
-                aria-label="재생 속도 변경"
-                className="shrink-0 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-bold text-zinc-600 hover:border-sky-400/60 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700 dark:text-zinc-300"
-              >
-                {speed.toFixed(1)}x
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <input
+                  type="range"
+                  min={1}
+                  max={2}
+                  step={0.1}
+                  value={speed}
+                  onChange={(e) => changeSpeed(Number(e.target.value))}
+                  aria-label="재생 속도 (1.0배 ~ 2.0배)"
+                  className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-zinc-300 accent-sky-500 dark:bg-zinc-700"
+                />
+                <span className="w-9 shrink-0 font-mono text-xs font-bold tabular-nums text-zinc-600 dark:text-zinc-300">
+                  {speed.toFixed(1)}x
+                </span>
+              </div>
 
               <div
                 role="group"
                 aria-label="음성 선택"
                 className="flex shrink-0 overflow-hidden rounded-full border border-zinc-300 dark:border-zinc-700"
               >
-                {(["female", "male"] as Voice[]).map((v) => (
+                {VOICE_OPTIONS.map(({ key, label }) => (
                   <button
-                    key={v}
+                    key={key}
                     type="button"
-                    onClick={() => switchVoice(v)}
-                    aria-pressed={voice === v}
+                    onClick={() => switchVoice(key)}
+                    aria-pressed={voice === key}
                     className={`px-2.5 py-1 text-xs font-semibold transition-colors ${
-                      voice === v
+                      voice === key
                         ? "bg-sky-500 text-white"
                         : "text-zinc-500 hover:text-sky-400 dark:text-zinc-400"
                     }`}
                   >
-                    {v === "female" ? "여성" : "남성"}
+                    {label}
                   </button>
                 ))}
               </div>
