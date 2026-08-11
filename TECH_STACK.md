@@ -36,6 +36,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트·글별 VIP 지정 | `components/blog-section.tsx`, `lib/previews.ts` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트). 관리자가 `previews/{id}.paid`로 유료 전용 지정 → 일반회원은 목록엔 보이되 열람 차단(카드/리스트/`/post` 모두 UI 게이트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭. `scripts/blog-webapp.gs`(posts+sites 겸용). savedAt 은 시트 자동 날짜 인식을 막기 위해 일반 텍스트로 고정 저장(2026-08-04, 9시간 시간대 오인식 버그 수정) |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
+| 유튜브→블로그 무료 이용 한도 | — | 일반회원 최초 5회 + 이후 7일 1회 무료, 유료회원 무제한 | `components/youtube-request.tsx` | 실제 횟수 관리는 tg-post-saver 서버(`yt-quota.js`)가 Firebase ID 토큰으로 본인 확인 후 처리 — 프론트는 안내문만 표시 |
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상, 업로드·삭제·VIP지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`setVip`→스크립트 속성 `VIP_FILES`), 다운로드 차단은 서버 검증 |
 | 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
 | 에이전트 협업 연출 **(연동테스트중)** | — | 카테고리 궤도 중앙 허브 클릭 → 각 사이트로 입자가 튀는 애니메이션 | `components/category-orbital.tsx`, `app/globals.css`(`agent-particle-travel`) | **실제 자동화 없음** — 순수 CSS 시각 연출. 4.2초간 재생 후 "완료!" 표시, 재생 중 궤도 회전은 정지 |

@@ -1,12 +1,14 @@
 "use client";
 
-// 유료회원 전용 — 유튜브 URL + 이메일을 입력하면 우리 서버(tg-post-saver)가
-// 유튜브 자막을 Claude 로 블로그 HTML 로 변환해 그 이메일로 발송한다.
-// @jini_youtube_bot(외부)은 건드리지 않는다. 일반회원에게는 잠금 안내만 보인다.
+// 유튜브 URL + 이메일을 입력하면 우리 서버(tg-post-saver)가 유튜브 자막을
+// Claude 로 블로그 HTML 로 변환해 그 이메일로 발송한다.
+// @jini_youtube_bot(외부)은 건드리지 않는다.
+// 일반회원도 최초 5회는 무료, 이후 7일에 1회 무료 — 서버가 로그인 토큰으로
+// 본인을 확인해 횟수를 관리한다(yt-quota.js). 유료회원 이상은 무제한.
 import { useEffect, useState } from "react";
 import { Send, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BOT_SERVER_URL } from "@/lib/firebase";
+import { BOT_SERVER_URL, getFirebaseAuth } from "@/lib/firebase";
 import { useMyProfile, useEffectiveGroup } from "@/lib/membership";
 
 // 진행 팝업 — 서버가 알려주는 실제 단계(status)를 폴링해 표시한다
@@ -55,24 +57,6 @@ export default function YoutubeRequest() {
     return () => clearInterval(id);
   }, [busy, status]);
 
-  if (!paid) {
-    return (
-      <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm">
-        <p className="flex items-center gap-2 font-semibold text-amber-500">
-          <Youtube className="h-4 w-4" aria-hidden="true" />
-          유튜브 → 블로그 이메일 변환{" "}
-          <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black">
-            VIP
-          </span>
-        </p>
-        <p className="mt-1.5 text-zinc-500 dark:text-zinc-400">
-          유료회원 전용 기능입니다. 유튜브 URL을 넣으면 블로그 글(HTML)로 변환해
-          가입 이메일로 보내드립니다.
-        </p>
-      </div>
-    );
-  }
-
   const submit = async () => {
     const u = url.trim();
     const e = email.trim();
@@ -88,10 +72,12 @@ export default function YoutubeRequest() {
     try {
       // Render 무료 플랜이 잠들어 있을 수 있어 먼저 깨운다
       await fetch(`${BOT_SERVER_URL}/api/wake`).catch(() => {});
+      // 일반회원의 무료 횟수는 서버가 로그인 토큰으로 본인을 확인해 관리한다
+      const idToken = await getFirebaseAuth().currentUser?.getIdToken().catch(() => undefined);
       const r = await fetch(`${BOT_SERVER_URL}/api/yt-to-blog`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl: u, email: e }),
+        body: JSON.stringify({ youtubeUrl: u, email: e, idToken }),
       });
       const data = await r.json().catch(() => ({ ok: false, message: "응답을 읽지 못했어요." }));
       if (!data.ok) {
@@ -149,10 +135,20 @@ export default function YoutubeRequest() {
     <div className="mt-4 rounded-xl border border-violet-400/40 bg-violet-400/5 p-4">
       <p className="flex items-center gap-2 text-sm font-bold text-violet-500">
         <Youtube className="h-4 w-4" aria-hidden="true" />
-        유튜브 → 블로그 이메일 변환 (유료회원)
+        유튜브 → 블로그 이메일 변환
       </p>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         유튜브 URL을 넣으면 자막을 블로그 글(HTML)로 변환해 아래 이메일로 보내드립니다.
+        {paid ? (
+          " 유료회원은 횟수 제한 없이 이용할 수 있어요."
+        ) : (
+          <>
+            {" "}
+            일반회원은 처음 5회는 무료, 그 이후는 7일마다 1회씩 무료로 이용할 수 있어요 — 더
+            자주 쓰고 싶다면{" "}
+            <span className="font-semibold text-violet-500">유료회원</span> 전환 시 무제한이에요.
+          </>
+        )}
       </p>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">

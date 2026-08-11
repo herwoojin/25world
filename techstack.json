@@ -94,6 +94,11 @@
           "config": "lib/membership.ts"
         },
         {
+          "name": "유튜브→블로그 변환 무료 이용 한도",
+          "purpose": "일반회원: 최초 5회 무료 + 이후 7일에 1회 무료 / 유료회원 이상: 무제한. Firebase ID 토큰을 tg-post-saver 서버로 보내 본인 확인 후 서버측(Firestore users/{uid})에서 횟수를 관리 — 클라이언트는 안내 문구만 표시",
+          "config": "components/youtube-request.tsx (tg-post-saver: yt-quota.js)"
+        },
+        {
           "name": "관리자 키 (id:pass)",
           "purpose": "관리자 모드 토글 — 업로드/삭제/권한 동기화는 Apps Script 가 이 키를 서버측에서 대조",
           "config": "components/admin-button.tsx, scripts/library-webapp.gs"
