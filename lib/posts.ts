@@ -93,15 +93,76 @@ export function extractPreview(html: string): PostPreview {
   return { image, heading, excerpt };
 }
 
+// Firestore 문서 한도는 1 MiB. 필드명·오버헤드를 빼고 넉넉히 남긴다.
+// (서버 storage/firestore.js 와 같은 값을 써야 읽기/쓰기가 맞물린다)
+const SINGLE_MAX = 900_000;
+const CHUNK_BYTES = 700_000;
+
+/** UTF-8 바이트 기준으로 문자열을 자른다 (서로게이트 쌍을 깨지 않는다) */
+function splitByBytes(str: string, maxBytes: number): string[] {
+  const enc = new TextEncoder();
+  const out: string[] = [];
+  let start = 0;
+  let bytes = 0;
+  let i = 0;
+  for (const ch of str) {
+    const b = enc.encode(ch).length;
+    if (bytes + b > maxBytes) {
+      out.push(str.slice(start, i));
+      start = i;
+      bytes = 0;
+    }
+    bytes += b;
+    i += ch.length;
+  }
+  if (start < str.length) out.push(str.slice(start));
+  return out;
+}
+
+/**
+ * 글 HTML 을 Firestore 에 저장할 문서 목록으로 만든다.
+ * 1 MiB 를 넘으면 posts/{id}__p0..N-1 조각 + 헤드 문서로 나눈다.
+ * 반환 순서대로 저장해야 한다 — 조각이 먼저, 헤드가 마지막.
+ */
+export function postHtmlDocs(
+  id: string,
+  html: string,
+  savedAt = new Date().toISOString()
+): { docId: string; data: Record<string, unknown> }[] {
+  if (new TextEncoder().encode(html).length <= SINGLE_MAX) {
+    return [{ docId: id, data: { html, savedAt } }];
+  }
+  const chunks = splitByBytes(html, CHUNK_BYTES);
+  return [
+    ...chunks.map((html, n) => ({ docId: `${id}__p${n}`, data: { html } })),
+    { docId: id, data: { parts: chunks.length, savedAt } },
+  ];
+}
+
+/** Firestore REST 로 posts/{docId} 문서 하나를 읽는다 */
+async function fetchPostDoc(docId: string) {
+  const res = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/posts/${encodeURIComponent(docId)}?key=${firebaseConfig.apiKey}`
+  );
+  return res.ok ? res.json() : null;
+}
+
 export async function fetchPostHtml(id: string): Promise<string | null> {
   try {
-    const res = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/posts/${encodeURIComponent(id)}?key=${firebaseConfig.apiKey}`
-    );
-    if (res.ok) {
-      const doc = await res.json();
-      const html = doc.fields?.html?.stringValue;
-      if (html) return html;
+    const doc = await fetchPostDoc(id);
+    const fields = doc?.fields;
+    // 작은 글은 html 필드 하나에 통째로 들어 있다
+    if (fields?.html?.stringValue) return fields.html.stringValue;
+
+    // 1 MiB 를 넘는 글은 posts/{id}__p0..N-1 조각으로 나뉘어 있다
+    const parts = Number(fields?.parts?.integerValue ?? 0);
+    if (parts > 0) {
+      const chunks = await Promise.all(
+        Array.from({ length: parts }, (_, n) => fetchPostDoc(`${id}__p${n}`))
+      );
+      const texts = chunks.map((c) => c?.fields?.html?.stringValue);
+      // 하나라도 빠지면 깨진 HTML 이 되므로 Storage 폴백으로 넘긴다
+      if (texts.every(Boolean)) return texts.join("");
     }
   } catch {}
   try {

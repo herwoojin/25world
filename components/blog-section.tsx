@@ -37,7 +37,7 @@ import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
 import { beginLoading, endLoading } from "@/lib/loading-bus";
-import { fetchPostHtml, formatKST } from "@/lib/posts";
+import { fetchPostHtml, formatKST, postHtmlDocs } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
 import {
   loadAllPreviews,
@@ -396,10 +396,10 @@ export default function BlogSection() {
         ? content
         : wrapHtml(title, content);
       const db = getFirestore(getFirebaseApp());
-      await setDoc(doc(db, "posts", id), {
-        html,
-        savedAt: new Date().toISOString(),
-      });
+      // 1 MiB 를 넘는 글은 조각으로 나뉜다. 조각 → 헤드 순서를 지켜야 한다.
+      for (const { docId, data } of postHtmlDocs(id, html)) {
+        await setDoc(doc(db, "posts", docId), data);
+      }
       await webappPost({
         id,
         title,
