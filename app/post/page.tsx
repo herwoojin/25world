@@ -43,6 +43,26 @@ export default function PostPage() {
       .catch(() => {});
   }, []);
 
+  // "목록으로" — 같은 사이트에서 넘어왔으면 뒤로가기(스크롤 위치·상태 보존),
+  // 새 탭이나 직접 접속이라 돌아갈 기록이 없으면 블로그 목록으로 이동
+  const backToList = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // ⌘/Ctrl/Shift + 클릭(새 탭·새 창)은 기본 동작 그대로 둔다
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    let sameOrigin = false;
+    try {
+      sameOrigin =
+        new URL(document.referrer).origin === window.location.origin;
+    } catch {
+      sameOrigin = false;
+    }
+    if (sameOrigin && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.location.href = "/#blog";
+  };
+
   // 새 탭으로 열렸으면 탭을 닫고, 안 닫히면(직접 접속 등) 목록으로 이동
   const closeOrHome = () => {
     window.close();
@@ -78,6 +98,7 @@ export default function PostPage() {
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3 shadow-sm">
         <a
           href="/#blog"
+          onClick={backToList}
           className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
