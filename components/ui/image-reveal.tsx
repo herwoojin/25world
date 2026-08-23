@@ -32,17 +32,20 @@ function getResponsiveValues() {
 interface SpotlightRevealProps {
   children: React.ReactNode;
   className?: string;
-  /** 스포트라이트 밖 영역을 얼마나 가릴지 (0~1, 기본 0.62) */
+  /**
+   * 스포트라이트 밖 영역을 얼마나 가릴지 (0~1).
+   * 지정하지 않으면 테마별 CSS 변수 --spot-dim 을 따른다 (globals.css).
+   */
   dim?: number;
-  /** 오버레이 블러 정도(px, 기본 3) */
+  /** 오버레이 블러 정도(px). 미지정 시 테마별 --spot-blur */
   blur?: number;
 }
 
 export function SpotlightReveal({
   children,
   className = "",
-  dim = 0.62,
-  blur = 3,
+  dim,
+  blur,
 }: SpotlightRevealProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
@@ -132,11 +135,14 @@ export function SpotlightReveal({
   const { SOFT_EDGE } = values;
   const active = !!lerpedPos && radius > 0;
 
+  const cx = lerpedPos?.x ?? 0;
+  const cy = lerpedPos?.y ?? 0;
+
   // 스포트라이트 안쪽은 오버레이를 투명하게(=선명), 바깥쪽은 dim 만큼 덮는다.
   // 상호작용 전(active=false)에는 오버레이를 완전히 투명하게 하여 아이콘이 정상적으로 보이게 한다.
   const maskStyle: React.CSSProperties = active
     ? (() => {
-        const mask = `radial-gradient(circle ${radius}px at ${lerpedPos!.x}px ${lerpedPos!.y}px,
+        const mask = `radial-gradient(circle ${radius}px at ${cx}px ${cy}px,
             transparent 0 ${radius - SOFT_EDGE - 20}px,
             rgba(0,0,0,0.10) ${radius - SOFT_EDGE}px,
             rgba(0,0,0,0.25) ${radius - SOFT_EDGE / 1.5}px,
@@ -146,6 +152,18 @@ export function SpotlightReveal({
         return { WebkitMaskImage: mask, maskImage: mask };
       })()
     : { WebkitMaskImage: "none", maskImage: "none" };
+
+  // 위 마스크의 반대 — 원 안쪽만 남긴다. 여기에 backdrop-filter 를 걸어
+  // "가려지지 않은 영역"이 아니라 실제로 밝아지는(또렷해지는) 영역을 만든다.
+  // blur 프로퍼티가 없으면 테마 변수(--spot-blur)를 쓴다. E-ink 는 0px 이라 블러가 없다.
+  const blurCss = `blur(${blur === undefined ? "var(--spot-blur)" : `${blur}px`})`;
+
+  const coreMask = `radial-gradient(circle ${radius}px at ${cx}px ${cy}px,
+      black 0 ${radius - SOFT_EDGE - 20}px,
+      rgba(0,0,0,0.90) ${radius - SOFT_EDGE}px,
+      rgba(0,0,0,0.65) ${radius - SOFT_EDGE / 1.5}px,
+      rgba(0,0,0,0.35) ${radius - SOFT_EDGE / 2}px,
+      transparent ${radius}px)`;
 
   return (
     <div
@@ -160,26 +178,46 @@ export function SpotlightReveal({
     >
       {children}
 
-      {/* 오버레이: 배경색으로 살짝 덮고 블러 — 마스크로 스포트라이트만 뚫린다 */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-background transition-opacity duration-300"
-        style={{
-          ...maskStyle,
-          opacity: active ? dim : 0,
-          backdropFilter: active ? `blur(${blur}px)` : "none",
-          WebkitBackdropFilter: active ? `blur(${blur}px)` : "none",
-        }}
-      />
-
-      {/* 소프트 글로우 링 */}
-      {lerpedPos && radius > 0 && (
+      {/* ① 스포트라이트 안쪽을 실제로 밝게/또렷하게 (테마별 --spot-filter)
+          야간=밝기↑, 주간=채도·대비↑, E-ink=잉크 대비↑ */}
+      {active && (
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
           style={{
-            background: `radial-gradient(circle ${radius + 30}px at ${lerpedPos.x}px ${lerpedPos.y}px, rgba(255,255,255,0.13) 0, rgba(255,255,255,0.06) 60%, transparent 100%)`,
-            mixBlendMode: "screen",
+            WebkitMaskImage: coreMask,
+            maskImage: coreMask,
+            backdropFilter: "var(--spot-filter)",
+            WebkitBackdropFilter: "var(--spot-filter)",
+          }}
+        />
+      )}
+
+      {/* ② 오버레이: 테마별 베일 색으로 덮고 블러 — 마스크로 스포트라이트만 뚫린다.
+          주간처럼 배경이 밝은 테마는 베일이 배경색이면 대비가 안 나서 회색을 쓴다. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+        style={{
+          background: "hsl(var(--spot-veil))",
+          ...maskStyle,
+          opacity: active ? (dim ?? "var(--spot-dim)") : 0,
+          backdropFilter: active ? blurCss : "none",
+          WebkitBackdropFilter: active ? blurCss : "none",
+        }}
+      />
+
+      {/* ③ 소프트 글로우 링 — 색·세기·블렌드를 테마가 정한다 */}
+      {active && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(circle ${radius + 30}px at ${cx}px ${cy}px,
+              rgba(var(--spot-glow) / var(--spot-glow-core)) 0,
+              rgba(var(--spot-glow) / var(--spot-glow-edge)) 60%,
+              transparent 100%)`,
+            mixBlendMode: "var(--spot-blend)" as React.CSSProperties["mixBlendMode"],
             transition: "background 0.3s",
           }}
         />

@@ -35,12 +35,10 @@ export default function WorldHero() {
         </Button>
       </div>
 
-      {/* 아이콘 무한 캐러셀 2줄 — 마우스를 따라 스포트라이트가 아이콘을 또렷하게 비춘다 */}
-      <SpotlightReveal
-        className="mt-14 sm:mt-16"
-        dim={0.55}
-        blur={3}
-      >
+      {/* 아이콘 무한 캐러셀 2줄 — 마우스를 따라 스포트라이트가 아이콘을 또렷하게 비춘다.
+          세기·색·블러는 테마별 CSS 변수(--spot-*, globals.css)가 정한다 —
+          주간/야간/E-ink 각각 대비가 나는 방식이 다르기 때문. */}
+      <SpotlightReveal className="mt-14 sm:mt-16">
         <div className="space-y-5 sm:space-y-6">
           <IconMarquee sites={row1} direction="left" locked={locked} paidOnly={paidOnly} />
           <IconMarquee sites={row2} direction="right" locked={locked} paidOnly={paidOnly} />
