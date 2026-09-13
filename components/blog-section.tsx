@@ -33,6 +33,7 @@ import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
 import YoutubeRequest from "@/components/youtube-request";
 import ActionMenu from "@/components/action-menu";
+import NaverCopyDialog from "@/components/naver-copy-dialog";
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
 import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
@@ -444,6 +445,9 @@ export default function BlogSection() {
     }
   }, [posts, sort, likeCounts, catFilter, previews, favs]);
 
+  // 관리자: 네이버 블로그용 복사 창을 띄울 글 (메뉴 밖에서 띄우므로 상태를 여기서 든다)
+  const [naverPost, setNaverPost] = useState<BlogPost | null>(null);
+
   const download = async (post: BlogPost) => {
     const html = await fetchPostHtml(post.id);
     if (!html) return;
@@ -809,6 +813,17 @@ export default function BlogSection() {
                     </Button>
                     <Button
                       variant="outline"
+                      onClick={() => setNaverPost(post)}
+                      aria-label={`${post.title} 네이버 블로그용 복사`}
+                      className="min-h-[44px] justify-start gap-2 text-[#03C75A]"
+                    >
+                      <span aria-hidden="true" className="rounded bg-[#03C75A] px-1 text-[10px] font-extrabold text-white">
+                        N
+                      </span>
+                      네이버 블로그용 복사
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => removePost(post)}
                       disabled={adminBusy}
                       aria-label={`${post.title} 삭제`}
@@ -820,6 +835,14 @@ export default function BlogSection() {
                   </>
                 )}
               </ActionMenu>
+              {/* 메뉴 밖에서 띄운다 — 안에 두면 메뉴가 닫힐 때 창도 함께 사라진다 */}
+              {naverPost?.id === post.id && (
+                <NaverCopyDialog
+                  postId={post.id}
+                  fallbackTitle={post.title}
+                  onClose={() => setNaverPost(null)}
+                />
+              )}
             </>
           );
 
