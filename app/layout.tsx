@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import SiteHeader from "@/components/site-header";
 import SiteFooter from "@/components/site-footer";
+import ContactOwner from "@/components/contact-owner";
 import PwaRegister from "@/components/pwa-register";
 import AuthGate from "@/components/auth-gate";
 import ErrorBoundary from "@/components/error-boundary";
@@ -49,6 +50,7 @@ export default function RootLayout({
               <SiteHeader />
               <LoadingPopup />
               {children}
+              <ContactOwner />
               <SiteFooter />
               <NotebookLMTray />
             </NlmProvider>
