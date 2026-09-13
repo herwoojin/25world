@@ -218,27 +218,49 @@ export default function LibrarySection() {
       timeZone: "Asia/Seoul",
     });
     setError("");
+    setWinMsg(null);
     setWinEdit({ id: f.id, start: f.freeStart || today, end: f.freeEnd || plus4 });
   };
+
+  // 기간 편집 폼 안에 바로 보여줄 진행·결과 문구.
+  // 섹션 위쪽의 공용 오류 자리는 폼에서 멀어서, 저장을 눌러도 "아무 반응이 없는" 것처럼 보였다.
+  const [winMsg, setWinMsg] = useState<{ kind: "saving" | "ok" | "error"; text: string } | null>(
+    null
+  );
 
   const saveFreeWindow = async (start: string, end: string) => {
     if (!winEdit) return;
     if (Boolean(start) !== Boolean(end)) {
-      setError("시작일과 종료일을 모두 입력해 주세요.");
+      setWinMsg({ kind: "error", text: "시작일과 종료일을 모두 입력해 주세요." });
       return;
     }
     if (start && start > end) {
-      setError("종료일이 시작일보다 빠를 수 없습니다.");
+      setWinMsg({ kind: "error", text: "종료일이 시작일보다 빠를 수 없습니다." });
       return;
     }
+    const id = winEdit.id;
     setError("");
+    setWinMsg({ kind: "saving", text: start ? "저장하는 중… (몇 초 걸려요)" : "기간을 해제하는 중…" });
     setBusy(start ? "무료 기간 저장 중…" : "무료 기간 해제 중…");
     try {
-      await setLibraryFreeWindow(url, getAdminKey(), winEdit.id, start, end);
-      setWinEdit(null);
-      await load();
+      await setLibraryFreeWindow(url, getAdminKey(), id, start, end);
+      await load(); // 서버에 실제로 반영된 값으로 배지를 다시 그린다
+      setWinMsg({
+        kind: "ok",
+        text: start
+          ? `✅ 적용 완료 — ${shortDate(start)}~${shortDate(end)} 동안 일반회원도 다운로드할 수 있어요.`
+          : "✅ 기간을 해제했어요 — 이제 VIP(유료회원 이상) 전용입니다.",
+      });
+      // 결과를 읽을 시간을 준 뒤 닫는다
+      setTimeout(() => {
+        setWinEdit((w) => (w?.id === id ? null : w));
+        setWinMsg(null);
+      }, 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "기간 설정에 실패했습니다.");
+      setWinMsg({
+        kind: "error",
+        text: e instanceof Error ? e.message : "기간 설정에 실패했습니다.",
+      });
     }
     setBusy("");
   };
@@ -581,16 +603,16 @@ export default function LibrarySection() {
                     </label>
                     <button
                       type="submit"
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || winMsg?.kind === "ok"}
                       className="min-h-[44px] rounded-full bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                     >
-                      저장
+                      {winMsg?.kind === "saving" ? "저장 중…" : winMsg?.kind === "ok" ? "적용됨" : "저장"}
                     </button>
                     {f.freeStart && (
                       <button
                         type="button"
                         onClick={() => saveFreeWindow("", "")}
-                        disabled={Boolean(busy)}
+                        disabled={Boolean(busy) || winMsg?.kind === "ok"}
                         className="min-h-[44px] rounded-full border border-zinc-300 px-4 text-sm font-semibold text-zinc-600 hover:border-red-400 hover:text-red-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
                       >
                         기간 해제
@@ -598,11 +620,29 @@ export default function LibrarySection() {
                     )}
                     <button
                       type="button"
-                      onClick={() => setWinEdit(null)}
+                      onClick={() => {
+                        setWinEdit(null);
+                        setWinMsg(null);
+                      }}
                       className="min-h-[44px] rounded-full px-3 text-sm text-zinc-500 hover:text-foreground"
                     >
                       취소
                     </button>
+                    {/* 진행·결과를 폼 바로 아래에 보여준다 */}
+                    {winMsg && (
+                      <p
+                        role={winMsg.kind === "error" ? "alert" : "status"}
+                        className={`basis-full rounded-md px-3 py-2 text-sm font-semibold ${
+                          winMsg.kind === "ok"
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : winMsg.kind === "error"
+                              ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                              : "text-zinc-500"
+                        }`}
+                      >
+                        {winMsg.text}
+                      </p>
+                    )}
                   </form>
                 )}
               </article>
