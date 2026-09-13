@@ -5,6 +5,8 @@
 //   · 업로드/삭제  : 관리자 키를 가진 요청만 (웹앱에서 서버측 검증)
 // 웹앱 URL 은 관리자 모드에서 입력해 Firestore siteMeta/config.libraryUrl 에 저장한다.
 
+import { BOT_SERVER_URL } from "@/lib/firebase";
+
 export interface LibraryFile {
   id: string;
   name: string;
@@ -125,19 +127,52 @@ export async function requestDownloadUrl(
     adminKey: opts.adminKey ?? "",
   });
   if (r.ok && r.url) return r.url as string;
-  if (r.error === "login-required") throw new Error("로그인 후 이용해 주세요.");
+  // 서버가 로그인 토큰을 확인하지 못한 경우. 화면에는 이미 로그인해 있으므로
+  // "로그인 후 이용"이라고 하면 오해를 산다 — 다시 로그인하라고 안내한다.
+  if (r.error === "login-required")
+    throw new Error("로그인 정보를 확인하지 못했어요. 로그아웃 후 다시 로그인해 주세요.");
   if (r.error === "paid-only")
     throw new Error("유료회원 이상만 받을 수 있는 자료입니다.");
   throw new Error(r.error || "다운로드 링크를 받지 못했습니다.");
 }
 
-/** 다운로드 허용(유료회원) 이메일 목록을 웹앱에 동기화 — 관리자만 */
+/** 자료실 파일 받기 — tg-post-saver 서버가 권한을 확인한 뒤 드라이브에서 받아 전달한다.
+ *  이메일이 없는 카카오 회원이나 브라우저에 구글 로그인이 안 된 회원도 받을 수 있다.
+ *  돌려주는 주소를 새 창으로 열면 바로 다운로드가 시작된다. */
+export async function requestLibraryDownload(opts: {
+  fileId: string;
+  idToken?: string;
+  adminKey?: string;
+}): Promise<string> {
+  // 무료 서버는 잠들어 있을 수 있다 — 먼저 깨운다
+  await fetch(`${BOT_SERVER_URL}/api/wake`).catch(() => {});
+  const res = await fetch(`${BOT_SERVER_URL}/api/library/ticket`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fileId: opts.fileId,
+      idToken: opts.idToken ?? "",
+      adminKey: opts.adminKey ?? "",
+    }),
+  });
+  const r = await res.json().catch(() => ({}));
+  if (r.ok && r.url) return `${BOT_SERVER_URL}${r.url}`;
+  if (r.error === "login-required")
+    throw new Error("로그인 정보를 확인하지 못했어요. 로그아웃 후 다시 로그인해 주세요.");
+  if (r.error === "paid-only") throw new Error("유료회원 이상만 받을 수 있는 자료입니다.");
+  if (r.error === "not-in-library") throw new Error("자료실에 없는 파일입니다.");
+  throw new Error(r.message || "다운로드를 준비하지 못했어요. 잠시 후 다시 시도해 주세요.");
+}
+
+/** 다운로드 허용(유료회원) 목록을 웹앱에 동기화 — 관리자만.
+ *  이메일이 없는 카카오 유료회원도 판정할 수 있도록 회원 ID(uid) 목록도 함께 보낸다. */
 export async function syncPaidEmails(
   webappUrl: string,
   adminKey: string,
-  emails: string[]
+  emails: string[],
+  uids: string[] = []
 ): Promise<number> {
-  const r = await post(webappUrl, { action: "syncPaid", adminKey, emails });
+  const r = await post(webappUrl, { action: "syncPaid", adminKey, emails, uids });
   if (!r.ok) throw new Error(r.error || "동기화에 실패했습니다.");
   return Number(r.count ?? emails.length);
 }

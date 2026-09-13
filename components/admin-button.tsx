@@ -96,7 +96,7 @@ export default function AdminButton() {
       onClick={toggle}
       disabled={busy}
       aria-label={on ? "관리자 모드 해제" : "관리자 로그인"}
-      title={on ? "관리자 모드 해제" : "관리자 로그인 (admin / 2525)"}
+      title={on ? "관리자 모드 해제" : "관리자 로그인"}
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
       className={`fixed right-3 z-50 flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-lg ring-1 backdrop-blur transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
         on

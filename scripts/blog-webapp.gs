@@ -6,9 +6,14 @@
  *   sites 탭 — id | cat | name | desc | url
  *
  * 배포 방법:
- *   1) https://script.google.com → 이 프로젝트(Code.gs) → 이 파일 내용을 통째로 붙여넣기
- *   2) 배포 → 배포 관리 → 기존 배포 수정(연필 아이콘) → 새 버전으로 배포
+ *   1) 구글 시트 → 확장 프로그램 → Apps Script → Code.gs 에 이 파일 내용을 통째로 붙여넣기
+ *   2) 프로젝트 설정(⚙️) → 스크립트 속성 → ADMIN_KEY 에 "아이디:비밀번호" 값을 넣는다
+ *      (코드에는 절대 적지 않는다 — 자료실 스크립트의 ADMIN_KEY 와 같은 값)
+ *   3) 배포 → 배포 관리 → 기존 배포 수정(연필 아이콘) → 새 버전으로 배포
  *      (반드시 "새 배포"가 아니라 기존 배포의 버전을 올려야 /exec URL 이 그대로 유지된다)
+ *
+ * 2026-09-13 — 관리자 키를 코드에서 뺐다. 이 저장소가 공개라 코드에 적힌 키를 누구나
+ * 볼 수 있었고, 그 키로 글·사이트 목록을 지우거나 고칠 수 있었다.
  *
  * 2026-08-04 수정 — savedAt 시간대 버그 수정:
  *   tg-post-saver 는 savedAt 을 진짜 UTC 문자열("YYYY-MM-DD HH:mm:ss")로 보내는데,
@@ -24,7 +29,11 @@
 
 const TAB = 'posts';
 const SITES_TAB = 'sites';
-const ADMIN_KEY = 'admin:2525';
+
+/** 스크립트 속성의 관리자 키. 없으면 '' — 빈 값과는 절대 일치시키지 않는다. */
+function adminKey_() {
+  return String(PropertiesService.getScriptProperties().getProperty('ADMIN_KEY') || '');
+}
 
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -67,7 +76,8 @@ function doPost(e) {
     savedAtCell.setNumberFormat('@').setValue(m.savedAt);
     return out('ok');
   }
-  if (m.adminKey !== ADMIN_KEY) return out('unauthorized');
+  const key = adminKey_();
+  if (!key || m.adminKey !== key) return out('unauthorized');
   if (action === 'verify') return out('ok');
 
   // ── 사이트 관리 ──

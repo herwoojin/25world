@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-08-04**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-09-13**
 
 ## 아키텍처
 
@@ -37,7 +37,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭. `scripts/blog-webapp.gs`(posts+sites 겸용). savedAt 은 시트 자동 날짜 인식을 막기 위해 일반 텍스트로 고정 저장(2026-08-04, 9시간 시간대 오인식 버그 수정) |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
 | 유튜브→블로그 무료 이용 한도 | — | 일반회원 최초 5회 + 이후 7일 1회 무료, 유료회원 무제한 | `components/youtube-request.tsx` | 실제 횟수 관리는 tg-post-saver 서버(`yt-quota.js`)가 Firebase ID 토큰으로 본인 확인 후 처리 — 프론트는 안내문만 표시 |
-| 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상, 업로드·삭제·VIP지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`setVip`→스크립트 속성 `VIP_FILES`), 다운로드 차단은 서버 검증 |
+| 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상(한시적 무료 기간엔 모두), 업로드·삭제·VIP·기간 지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`VIP_FILES`), 무료 기간(`FREE_WINDOWS`, 한국시간·종료일 포함). **다운로드는 tg-post-saver 가 대행** — `/api/library/ticket` → Apps Script `authorize`(판정) → 서버가 드라이브에서 스트리밍. 이메일 없는 카카오 회원·구글 미로그인 브라우저도 가능 |
 | 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
 | 에이전트 협업 연출 **(연동테스트중)** | — | 카테고리 궤도 중앙 허브 클릭 → 각 사이트로 입자가 튀는 애니메이션 | `components/category-orbital.tsx`, `app/globals.css`(`agent-particle-travel`) | **실제 자동화 없음** — 순수 CSS 시각 연출. 4.2초간 재생 후 "완료!" 표시, 재생 중 궤도 회전은 정지 |
 | 프론트엔드 안정성 (재시도 캐시 + 에러 경계) | — | 계정 전환 직후 등 일시적 오류로 사이트목록/설정/부가자료가 빈 채로 굳는 것 방지 | `lib/use-sites.ts`, `lib/site-config.ts`, `lib/site-resources.ts`, `components/error-boundary.tsx` | 로더 실패 시 최대 3회 짧게 재시도, 그래도 실패하면 다음 호출에서 다시 시도(캐시에 실패를 고정하지 않음). 최상위 `ErrorBoundary` 가 렌더링 오류로 전체 페이지가 빈 화면이 되는 것을 막음. 동적 사이트 캐시는 `useState` 초기값이 아니라 마운트 후 `useEffect`에서 반영해 정적 빌드 HTML과 재방문자 첫 렌더가 어긋나던 하이드레이션 불일치(React #418/423/425) 제거 |
@@ -60,6 +60,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 
 - 배터리 인디케이터(서버 용량 신호등)는 **해당 없음** — 백엔드·서버리스 함수가 전혀 없는 순수 정적 사이트.
 - 방문 카운트·검색·상태 배지는 Phase 2 백로그 (TASK.md T-15~T-18).
-- **자료실 다운로드는 서버 검증**: 목록만 공개고, 실제 파일 링크는 Apps Script 가 Firebase ID 토큰을 Identity Toolkit 으로 검증(위조 불가)하고 스크립트 속성의 유료회원 이메일 목록과 대조한 뒤에만 발급한다. 통과하면 그 사람 계정에만 뷰어 권한을 준다. **단, 드라이브 폴더 공유가 "제한됨"이어야 이 차단이 완성된다** — "링크가 있는 모든 사용자"로 두면 링크를 아는 사람은 우회할 수 있다.
+- **자료실 다운로드는 서버 검증 + 서버 대행 전달** (2026-09-13 변경): Apps Script 가 Firebase ID 토큰을 Identity Toolkit 으로 검증(위조 불가)하고, 무료 기간·VIP·유료회원(이메일 또는 uid)을 판정한다. 통과하면 소유자 OAuth 토큰을 **tg-post-saver 서버에만**(스크립트 속성 `SERVER_SECRET` 인증) 주고, 서버가 드라이브에서 받아 회원에게 흘려보낸다. 예전 방식(회원 이메일에 뷰어 권한 부여 → 드라이브 링크)은 카카오 로그인 회원이 로그인 기록에 이메일이 없어 전부 `login-required` 로 막혔고, 브라우저에 같은 구글 계정으로 로그인하지 않은 회원도 받을 수 없었다. 드라이브 폴더 공유는 여전히 "제한됨"으로 둔다.
 - 유료회원 판정 근거를 Firestore 가 아니라 Apps Script 속성에 두는 이유: `users/{uid}` 는 클라이언트가 쓸 수 있어(규칙이 개방형) 등급 자가 승격이 가능하다. 등급 변경 후에는 관리자 화면에서 **동기화**를 눌러야 서버 목록에 반영된다.
 - 업로드는 **브라우저 → 드라이브 직접(resumable)** 경로가 기본이라 파일 크기 제약이 사실상 없다(가드 2GB, 실질 상한은 계정 저장용량 15GB). Apps Script 는 1회성 OAuth 토큰만 발급한다. 구버전 웹앱이면 base64 폴백(≤30MB)으로 자동 전환.
+- **관리자 키·서버 비밀값은 코드에 두지 않는다** (2026-09-13): 이 저장소는 공개라 예전 `ADMIN_KEY` 가 누구에게나 보였다(사이트 관리자 버튼 툴팁에도 노출). 그 키로 자료실 `token` 을 부르면 소유자 드라이브 토큰까지 받을 수 있었다. 이제 두 Apps Script 모두 **스크립트 속성**(`ADMIN_KEY`, 자료실은 `SERVER_SECRET` 추가)에서 읽고, 값이 비어 있으면 어떤 요청도 관리자로 인정하지 않는다. 옛 키는 git 기록에 남아 있으므로 반드시 새 값으로 교체한다.

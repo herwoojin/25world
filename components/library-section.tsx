@@ -29,7 +29,7 @@ import {
   formatBytes,
   freeWindowStatus,
   listLibraryFiles,
-  requestDownloadUrl,
+  requestLibraryDownload,
   revokeAllAccess,
   setLibraryFreeWindow,
   setLibraryVip,
@@ -133,18 +133,33 @@ export default function LibrarySection() {
   };
 
   // 다운로드 — 웹앱이 신원·등급을 확인한 뒤 내주는 링크로만 연다
+  // 다운로드 — tg-post-saver 서버가 권한(로그인·VIP·무료기간·유료회원)을 확인한 뒤
+  // 구글 드라이브에서 받아 그대로 전달한다. 이메일 없는 카카오 회원이나 브라우저에
+  // 구글 로그인이 안 된 회원도 받을 수 있다.
   const download = async (f: LibraryFile) => {
     setError("");
-    setBusy(`"${f.name}" 준비 중…`);
+    const adminKey = getAdminKey();
+    const user = getFirebaseAuth().currentUser;
+    if (!adminKey && !user) {
+      setError("로그인 정보가 없어요. 새로고침한 뒤 다시 로그인해 주세요.");
+      return;
+    }
+
+    // 준비(서버 깨우기·권한 확인)에 몇 초 걸린다. 그 뒤에 새 창을 열면 팝업 차단에
+    // 막히므로, 클릭 순간 빈 창을 먼저 열어 두고 주소가 오면 그 창으로 보낸다.
+    const win = window.open("about:blank", "_blank");
+    setBusy(`"${f.name}" 준비 중… (처음이면 서버를 깨우느라 30초쯤 걸릴 수 있어요)`);
     try {
-      const idToken = await getFirebaseAuth().currentUser?.getIdToken();
-      const link = await requestDownloadUrl(url, {
-        idToken,
-        adminKey: getAdminKey(),
-        fileId: f.id,
-      });
-      window.open(link, "_blank", "noopener");
+      const idToken = await user?.getIdToken();
+      const link = await requestLibraryDownload({ fileId: f.id, idToken, adminKey });
+      if (win) {
+        win.opener = null;
+        win.location.href = link;
+      } else {
+        window.location.href = link; // 빈 창도 막힌 환경이면 현재 탭에서 받는다
+      }
     } catch (e) {
+      win?.close();
       setError(e instanceof Error ? e.message : "다운로드에 실패했습니다.");
     }
     setBusy("");
@@ -156,10 +171,11 @@ export default function LibrarySection() {
     setError("");
     try {
       const users = await listUsers();
-      const emails = users
-        .filter((u) => u.group !== "general" && u.email)
-        .map((u) => u.email);
-      const n = await syncPaidEmails(url, getAdminKey(), emails);
+      const paidUsers = users.filter((u) => u.group !== "general");
+      const emails = paidUsers.filter((u) => u.email).map((u) => u.email);
+      // 이메일이 없는 카카오 유료회원도 서버가 판정할 수 있도록 회원 ID 도 함께 보낸다
+      const uids = paidUsers.map((u) => u.uid);
+      const n = await syncPaidEmails(url, getAdminKey(), emails, uids);
       setBusy("");
       window.alert(`유료회원 이상 ${n}명의 다운로드 권한을 동기화했습니다.`);
     } catch (e) {
@@ -421,6 +437,12 @@ export default function LibrarySection() {
             </div>
           )}
 
+          {/* 진행 문구 — 예전에는 버튼만 잠기고 아무것도 보이지 않아 "반응이 없는" 것처럼 보였다 */}
+          {busy && (
+            <p role="status" className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+              {busy}
+            </p>
+          )}
           {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
           <div className="mt-4 space-y-2">

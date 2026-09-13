@@ -8,20 +8,27 @@
  *
  * 배포 방법 (한 번만):
  *   1) https://script.google.com → 새 프로젝트 → 이 파일 내용을 통째로 붙여넣기
- *   2) 아래 FOLDER_ID / ADMIN_KEY 확인
+ *   2) 프로젝트 설정(⚙️) → 스크립트 속성에 두 값을 넣는다 (코드에는 절대 적지 않는다)
+ *        · ADMIN_KEY     — 사이트 관리자 모드의 "아이디:비밀번호" 와 같은 값
+ *        · SERVER_SECRET — tg-post-saver(Render) 환경변수 LIBRARY_SERVER_SECRET 과 같은 값
  *   3) 배포 → 새 배포 → 유형: 웹 앱
  *        · 실행: 나(herhero78@gmail.com)
  *        · 액세스 권한: 모든 사용자
  *   4) 발급된 /exec URL 을 사이트 자료실 섹션(관리자 모드)에 붙여넣으면 끝
  *
  * 코드를 고친 뒤에는 반드시 "새 배포"(또는 기존 배포 버전 변경)를 해야 반영된다.
+ *
+ * 2026-09-13 — 관리자 키를 코드에서 뺐다. 이 저장소가 공개라 코드에 적힌 키를 누구나
+ * 볼 수 있었고, 그 키로 action:'token' 을 부르면 소유자 드라이브 토큰까지 받을 수 있었다.
  */
 
 // 자료를 보관할 구글 드라이브 폴더
 const FOLDER_ID = '1HlcB_X5WEiuEOqZ-pHwmflYLRpidoFmz';
 
-// 업로드/삭제에 필요한 관리자 키 — 사이트 관리자 모드의 "아이디:비밀번호" 와 같아야 한다
-const ADMIN_KEY = 'admin:2525';
+/** 스크립트 속성에 둔 비밀값. 없으면 '' — 호출부는 빈 값과 절대 일치시키지 않는다. */
+function secret_(name) {
+  return String(PropertiesService.getScriptProperties().getProperty(name) || '');
+}
 
 // 폴백(base64) 업로드의 최대 크기.
 // 큰 파일은 브라우저 → 구글 드라이브 직접 업로드(resumable)를 쓰므로 이 값에 걸리지 않는다.
@@ -83,8 +90,26 @@ function paidEmails_() {
   }
 }
 
+/** 다운로드 허용 회원 ID(uid) 목록 — 이메일이 없는 카카오 유료회원 판정용 */
+function paidUids_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('PAID_UIDS');
+  try {
+    return JSON.parse(raw || '[]');
+  } catch (err) {
+    return [];
+  }
+}
+
+/** 유료회원 이상인가 — 이메일 또는 회원 ID 가 동기화된 목록에 있으면 */
+function isPaid_(who) {
+  if (who.email && paidEmails_().indexOf(who.email) !== -1) return true;
+  return paidUids_().indexOf(who.uid) !== -1;
+}
+
 /** Firebase ID 토큰 검증 → { email, uid } (실패 시 null).
- *  구글 Identity Toolkit 에 직접 물어보므로 위조 토큰은 통과할 수 없다. */
+ *  구글 Identity Toolkit 에 직접 물어보므로 위조 토큰은 통과할 수 없다.
+ *  email 은 빈 문자열일 수 있다 — 카카오 로그인 회원은 로그인 기록에 이메일이 없다.
+ *  (예전에는 이메일이 없으면 null 을 돌려줘, 카카오 회원이 전부 login-required 로 막혔다) */
 function verifyIdToken_(idToken) {
   if (!idToken) return null;
   const res = UrlFetchApp.fetch(
@@ -99,8 +124,11 @@ function verifyIdToken_(idToken) {
   );
   if (res.getResponseCode() !== 200) return null;
   const users = (JSON.parse(res.getContentText()).users || [])[0];
-  if (!users || !users.email) return null;
-  return { email: String(users.email).toLowerCase(), uid: users.localId };
+  if (!users || !users.localId) return null;
+  return {
+    email: users.email ? String(users.email).toLowerCase() : '',
+    uid: String(users.localId),
+  };
 }
 
 function json_(obj) {
@@ -166,54 +194,84 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    const isAdmin = String(body.adminKey || '') === ADMIN_KEY;
+    const adminKey = secret_('ADMIN_KEY');
+    const isAdmin = !!adminKey && String(body.adminKey || '') === adminKey;
 
-    // ── 회원용 액션 ────────────────────────────────────────
-    // 다운로드: 로그인 토큰을 서버에서 검증하고, 압축파일이면 유료 목록까지 대조한 뒤
-    // 그 사람 계정에만 열람 권한을 준다. 폴더를 "제한됨"으로 두면 이 경로 외에는
-    // 파일을 받을 방법이 없다.
-    if (body.action === 'download') {
-      const id = String(body.id || '');
+    /** 이 요청자가 이 파일을 받을 수 있는가 → { ok, file, who } 또는 { ok:false, error } */
+    function checkAccess_(id) {
       const file = DriveApp.getFileById(id);
-
       // 자료실 폴더 밖의 파일 id 를 넣어 내 드라이브 전체를 긁는 것을 막는다
-      if (!inLibraryFolder_(file)) {
-        return json_({ ok: false, error: 'not-in-library' });
-      }
-      const url = 'https://drive.google.com/uc?export=download&id=' + id;
-
-      if (isAdmin) return json_({ ok: true, url: url });
+      if (!inLibraryFolder_(file)) return { ok: false, error: 'not-in-library' };
+      if (isAdmin) return { ok: true, file: file, who: null };
 
       const who = verifyIdToken_(body.idToken);
-      if (!who) return json_({ ok: false, error: 'login-required' });
+      if (!who) return { ok: false, error: 'login-required' };
 
       // 한시적 무료 기간 안이면 등급과 무관하게 받을 수 있다 (로그인은 여전히 필요)
       const freeNow = inFreeWindow_(freeWindowMap_()[id], Date.now());
-      if (
-        !freeNow &&
-        isVipFile_(id, file.getName()) &&
-        paidEmails_().indexOf(who.email) === -1
-      ) {
-        return json_({ ok: false, error: 'paid-only' });
+      if (!freeNow && isVipFile_(id, file.getName()) && !isPaid_(who)) {
+        return { ok: false, error: 'paid-only' };
       }
+      return { ok: true, file: file, who: who };
+    }
 
-      file.addViewer(who.email); // 이미 있으면 그대로 (알림 메일 없음)
+    // ── 서버 전용: 다운로드 허가 (tg-post-saver 가 호출) ─────────
+    // 판정을 통과하면 소유자 OAuth 토큰을 돌려준다. 서버는 이 토큰으로 드라이브에서
+    // 파일을 받아 회원에게 흘려보낸다. 토큰은 드라이브 전체 권한이므로 SERVER_SECRET 을
+    // 아는 서버에게만 주고, 회원 브라우저로는 절대 나가지 않는다.
+    if (body.action === 'authorize') {
+      const serverSecret = secret_('SERVER_SECRET');
+      if (!serverSecret || String(body.serverSecret || '') !== serverSecret) {
+        return json_({ ok: false, error: 'unauthorized' });
+      }
+      const r = checkAccess_(String(body.id || ''));
+      if (!r.ok) return json_(r);
+      return json_({
+        ok: true,
+        token: ScriptApp.getOAuthToken(),
+        name: r.file.getName(),
+        mimeType: r.file.getMimeType(),
+        size: r.file.getSize(),
+      });
+    }
+
+    // ── 회원용 (예전 방식 — 호환용으로만 남김) ────────────────
+    // 회원 이메일에 드라이브 보기 권한을 주고 드라이브 링크를 연다. 이메일이 없는 카카오
+    // 회원은 권한을 줄 수 없어 받을 수 없다. 사이트는 이제 위의 authorize 경로를 쓴다.
+    if (body.action === 'download') {
+      const id = String(body.id || '');
+      const r = checkAccess_(id);
+      if (!r.ok) return json_(r);
+      const url = 'https://drive.google.com/uc?export=download&id=' + id;
+      if (r.who) {
+        if (!r.who.email) return json_({ ok: false, error: 'email-required' });
+        r.file.addViewer(r.who.email); // 이미 있으면 그대로 (알림 메일 없음)
+      }
       return json_({ ok: true, url: url });
     }
 
     // ── 여기부터 관리자 전용 ──────────────────────────────
     if (!isAdmin) return json_({ ok: false, error: 'unauthorized' });
 
-    // 유료회원 이메일 목록 동기화 (사이트 관리자 화면에서 호출)
+    // 유료회원 목록 동기화 (사이트 관리자 화면에서 호출) — 이메일 + 회원 ID(uid).
+    // uid 는 이메일이 없는 카카오 유료회원을 판정하는 데 쓴다.
     if (body.action === 'syncPaid') {
-      const list = (body.emails || []).map(function (x) {
-        return String(x).trim().toLowerCase();
-      });
-      PropertiesService.getScriptProperties().setProperty(
-        'PAID_EMAILS',
-        JSON.stringify(list)
-      );
-      return json_({ ok: true, count: list.length });
+      const clean = function (arr, lower) {
+        return (arr || [])
+          .map(function (x) {
+            const s = String(x).trim();
+            return lower ? s.toLowerCase() : s;
+          })
+          .filter(function (x) {
+            return x;
+          });
+      };
+      const emails = clean(body.emails, true);
+      const uids = clean(body.uids, false);
+      const props = PropertiesService.getScriptProperties();
+      props.setProperty('PAID_EMAILS', JSON.stringify(emails));
+      props.setProperty('PAID_UIDS', JSON.stringify(uids));
+      return json_({ ok: true, count: Math.max(emails.length, uids.length) });
     }
 
     // 파일별 VIP 지정/해제 (확장자 기본값을 덮어쓴다)
