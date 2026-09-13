@@ -50,6 +50,27 @@ function isVipFile_(id, name) {
   return VIP_EXT.test(name);
 }
 
+/** 관리자가 파일별로 지정한 한시적 무료 기간 맵
+ *  {fileId: {start: 'YYYY-MM-DD', end: 'YYYY-MM-DD'}} (스크립트 속성에 보관) */
+function freeWindowMap_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('FREE_WINDOWS');
+  try {
+    return JSON.parse(raw || '{}');
+  } catch (err) {
+    return {};
+  }
+}
+
+/** 지금이 무료 기간 안인가 — 날짜는 한국시간 기준, 종료일은 그날 23:59:59 까지 포함.
+ *  판정을 서버 시계로 하는 이유: 회원이 브라우저 시계를 바꿔도 기간을 늘릴 수 없다. */
+function inFreeWindow_(w, now) {
+  if (!w || !w.start || !w.end) return false;
+  const start = new Date(w.start + 'T00:00:00+09:00').getTime();
+  const end = new Date(w.end + 'T23:59:59.999+09:00').getTime();
+  const t = now || Date.now();
+  return t >= start && t <= end;
+}
+
 /** 다운로드 허용 이메일 목록 (관리자가 사이트에서 동기화 → 스크립트 속성에 보관).
  *  Firestore 가 아니라 여기에 두는 이유: 회원이 브라우저에서 자기 등급을 조작해도
  *  이 목록은 바꿀 수 없다. 진짜 판단 근거는 항상 서버에 있어야 한다. */
@@ -104,9 +125,12 @@ function inLibraryFolder_(file) {
 /** 폴더 안의 파일 목록 (최신순) */
 function listFiles_() {
   const it = folder_().getFiles();
+  const windows = freeWindowMap_(); // 파일마다 속성을 다시 읽지 않도록 한 번만
+  const now = Date.now();
   const out = [];
   while (it.hasNext()) {
     const f = it.next();
+    const w = windows[f.getId()] || null;
     out.push({
       id: f.getId(),
       name: f.getName(),
@@ -115,6 +139,9 @@ function listFiles_() {
       desc: f.getDescription() || '',
       updatedAt: f.getLastUpdated().toISOString(),
       vip: isVipFile_(f.getId(), f.getName()),
+      freeStart: w ? w.start : '',
+      freeEnd: w ? w.end : '',
+      freeNow: inFreeWindow_(w, now),
       // 다운로드 링크는 목록에 싣지 않는다 — action:'download' 로 신원을 검증한 뒤에만 내준다
       viewUrl: f.getUrl(),
     });
@@ -160,7 +187,13 @@ function doPost(e) {
       const who = verifyIdToken_(body.idToken);
       if (!who) return json_({ ok: false, error: 'login-required' });
 
-      if (isVipFile_(id, file.getName()) && paidEmails_().indexOf(who.email) === -1) {
+      // 한시적 무료 기간 안이면 등급과 무관하게 받을 수 있다 (로그인은 여전히 필요)
+      const freeNow = inFreeWindow_(freeWindowMap_()[id], Date.now());
+      if (
+        !freeNow &&
+        isVipFile_(id, file.getName()) &&
+        paidEmails_().indexOf(who.email) === -1
+      ) {
         return json_({ ok: false, error: 'paid-only' });
       }
 
@@ -194,6 +227,41 @@ function doPost(e) {
         JSON.stringify(m)
       );
       return json_({ ok: true });
+    }
+
+    // 한시적 무료 기간 설정/해제.
+    // 기간을 두면 그 파일은 VIP 로 지정된다 — 기간 안에는 모두, 기간 밖(시작 전·종료 후)에는
+    // 유료회원 이상만 받을 수 있게 되어, 종료일이 지나면 저절로 유료 전용으로 돌아간다.
+    // start/end 를 둘 다 비우면 기간만 해제한다 (VIP 지정은 그대로 둔다).
+    if (body.action === 'setFreeWindow') {
+      const id = String(body.id || '');
+      if (!id) return json_({ ok: false, error: 'id required' });
+      const start = String(body.start || '').trim();
+      const end = String(body.end || '').trim();
+      const props = PropertiesService.getScriptProperties();
+      const windows = freeWindowMap_();
+
+      if (!start && !end) {
+        delete windows[id];
+      } else {
+        const re = /^\d{4}-\d{2}-\d{2}$/;
+        // 형식만 보면 2026-02-31 이 통과한다 (V8 이 3/3 으로 넘겨버림).
+        // 파싱한 시각을 한국시간 날짜로 되돌려 입력과 같은지까지 확인한다.
+        const valid = function (s) {
+          if (!re.test(s)) return false;
+          const t = new Date(s + 'T00:00:00+09:00').getTime();
+          return !isNaN(t) && new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10) === s;
+        };
+        if (!valid(start) || !valid(end)) return json_({ ok: false, error: 'bad-date' });
+        if (start > end) return json_({ ok: false, error: 'bad-range' });
+        windows[id] = { start: start, end: end };
+
+        const m = vipMap_();
+        m[id] = true;
+        props.setProperty('VIP_FILES', JSON.stringify(m));
+      }
+      props.setProperty('FREE_WINDOWS', JSON.stringify(windows));
+      return json_({ ok: true, freeNow: inFreeWindow_(windows[id], Date.now()) });
     }
 
     // 지금까지 부여된 열람 권한을 모두 회수 (등급이 내려간 사람 정리용)

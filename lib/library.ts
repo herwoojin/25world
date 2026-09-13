@@ -15,6 +15,34 @@ export interface LibraryFile {
   /** 유료회원 이상만 받을 수 있는 파일인가 (서버가 판정) */
   vip: boolean;
   viewUrl: string;
+  /** 한시적 무료 기간 (YYYY-MM-DD, 한국시간·종료일 포함). 미설정이면 없음 */
+  freeStart?: string;
+  freeEnd?: string;
+  /** 지금이 무료 기간 안인가 — 서버 시계로 판정 (구버전 웹앱이면 없음) */
+  freeNow?: boolean;
+}
+
+/** 무료 기간 상태 — 화면 표시용 (실제 허용 여부는 서버의 freeNow 가 결정한다) */
+export function freeWindowStatus(
+  f: Pick<LibraryFile, "freeStart" | "freeEnd" | "freeNow">,
+  now = new Date()
+): "none" | "upcoming" | "active" | "ended" {
+  if (!f.freeStart || !f.freeEnd) return "none";
+  if (f.freeNow) return "active";
+  const start = new Date(`${f.freeStart}T00:00:00+09:00`).getTime();
+  const end = new Date(`${f.freeEnd}T23:59:59.999+09:00`).getTime();
+  const t = now.getTime();
+  if (t < start) return "upcoming";
+  if (t > end) return "ended";
+  // 서버가 아직 새 버전이 아니어서 freeNow 가 없을 때의 폴백
+  return "active";
+}
+
+/** "2026-09-17" → "9/17" */
+export function shortDate(ymd?: string): string {
+  if (!ymd) return "";
+  const [, m, d] = ymd.split("-");
+  return `${Number(m)}/${Number(d)}`;
 }
 
 /** 폴백(base64 → Apps Script) 경로의 상한 — gs 의 MAX_UPLOAD_MB 와 맞춘다 */
@@ -123,6 +151,25 @@ export async function setLibraryVip(
 ): Promise<void> {
   const r = await post(webappUrl, { action: "setVip", adminKey, id, vip });
   if (!r.ok) throw new Error(r.error || "VIP 설정에 실패했습니다.");
+}
+
+/** 한시적 무료 기간 설정/해제 — 관리자만.
+ *  기간 안에는 일반회원도 받을 수 있고, 기간 밖에는 VIP(유료회원 이상) 전용이다.
+ *  start/end 를 둘 다 비우면 기간을 해제한다. */
+export async function setLibraryFreeWindow(
+  webappUrl: string,
+  adminKey: string,
+  id: string,
+  start: string,
+  end: string
+): Promise<void> {
+  const r = await post(webappUrl, { action: "setFreeWindow", adminKey, id, start, end });
+  if (r.ok) return;
+  if (r.error === "bad-range") throw new Error("종료일이 시작일보다 빠를 수 없습니다.");
+  if (r.error === "bad-date") throw new Error("날짜 형식이 올바르지 않습니다.");
+  if (String(r.error || "").startsWith("unknown action"))
+    throw new Error("웹앱이 구버전입니다. Apps Script 를 새 버전으로 배포해 주세요.");
+  throw new Error(r.error || "기간 설정에 실패했습니다.");
 }
 
 /** 지금까지 부여된 열람 권한 전체 회수 — 관리자만 */

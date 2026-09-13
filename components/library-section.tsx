@@ -7,6 +7,7 @@
 // 실제 저장은 Apps Script 웹앱(scripts/library-webapp.gs)이 내 구글 드라이브에 한다.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CalendarClock,
   ChevronDown,
   Download,
   FolderOpen,
@@ -26,10 +27,13 @@ import {
   deleteLibraryFile,
   fileEmoji,
   formatBytes,
+  freeWindowStatus,
   listLibraryFiles,
   requestDownloadUrl,
   revokeAllAccess,
+  setLibraryFreeWindow,
   setLibraryVip,
+  shortDate,
   syncPaidEmails,
   uploadLibraryFile,
   type LibraryFile,
@@ -202,6 +206,43 @@ export default function LibrarySection() {
     }
   };
 
+  // 관리자: 한시적 무료 기간 편집 — 기간 안에는 일반회원 포함 모두, 밖에는 VIP 전용
+  const [winEdit, setWinEdit] = useState<{ id: string; start: string; end: string } | null>(
+    null
+  );
+
+  const openWindowEditor = (f: LibraryFile) => {
+    // 오늘(한국시간)부터 5일간을 기본값으로 — "sv-SE" 로케일은 YYYY-MM-DD 로 찍힌다
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+    const plus4 = new Date(Date.now() + 4 * 86400000).toLocaleDateString("sv-SE", {
+      timeZone: "Asia/Seoul",
+    });
+    setError("");
+    setWinEdit({ id: f.id, start: f.freeStart || today, end: f.freeEnd || plus4 });
+  };
+
+  const saveFreeWindow = async (start: string, end: string) => {
+    if (!winEdit) return;
+    if (Boolean(start) !== Boolean(end)) {
+      setError("시작일과 종료일을 모두 입력해 주세요.");
+      return;
+    }
+    if (start && start > end) {
+      setError("종료일이 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+    setError("");
+    setBusy(start ? "무료 기간 저장 중…" : "무료 기간 해제 중…");
+    try {
+      await setLibraryFreeWindow(url, getAdminKey(), winEdit.id, start, end);
+      setWinEdit(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "기간 설정에 실패했습니다.");
+    }
+    setBusy("");
+  };
+
   const saveUrl = async () => {
     const v = urlDraft.trim();
     if (v && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
@@ -372,7 +413,9 @@ export default function LibrarySection() {
             )}
             {files?.map((f) => {
               const vip = f.vip;
-              const locked = vip && !paidUp;
+              const win = freeWindowStatus(f);
+              // 무료 기간 중에는 등급과 무관하게 받을 수 있다 (실제 허용은 서버가 판정)
+              const locked = vip && !paidUp && win !== "active";
               return (
               <article
                 key={f.id}
@@ -384,14 +427,46 @@ export default function LibrarySection() {
                   {fileEmoji(f.name, f.mimeType)}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-bold">{f.name}</span>
                     {vip && (
                       <span
-                        title="유료회원 이상 다운로드 가능"
-                        className="shrink-0 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-black"
+                        title={
+                          win === "active"
+                            ? "무료 기간이 끝나면 유료회원 이상만 다운로드 가능"
+                            : "유료회원 이상 다운로드 가능"
+                        }
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold ${
+                          win === "active"
+                            ? "border border-amber-400 text-amber-500 line-through decoration-2"
+                            : "bg-amber-400 text-black"
+                        }`}
                       >
                         VIP
+                      </span>
+                    )}
+                    {win === "active" && (
+                      <span
+                        title={`${f.freeStart} ~ ${f.freeEnd} 누구나 다운로드 가능`}
+                        className="shrink-0 rounded bg-emerald-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white"
+                      >
+                        🎁 무료 ~{shortDate(f.freeEnd)}
+                      </span>
+                    )}
+                    {win === "upcoming" && (
+                      <span
+                        title={`${f.freeStart} ~ ${f.freeEnd} 누구나 다운로드 가능`}
+                        className="shrink-0 rounded border border-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400"
+                      >
+                        무료 예정 {shortDate(f.freeStart)}~{shortDate(f.freeEnd)}
+                      </span>
+                    )}
+                    {win === "ended" && adminOn && (
+                      <span
+                        title={`${f.freeStart} ~ ${f.freeEnd} 무료 기간 종료 — 지금은 VIP 전용`}
+                        className="shrink-0 rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-bold text-zinc-400 dark:border-zinc-700"
+                      >
+                        무료 종료 {shortDate(f.freeEnd)}
                       </span>
                     )}
                   </span>
@@ -441,6 +516,26 @@ export default function LibrarySection() {
                 {adminOn && (
                   <button
                     type="button"
+                    onClick={() =>
+                      winEdit?.id === f.id ? setWinEdit(null) : openWindowEditor(f)
+                    }
+                    disabled={Boolean(busy)}
+                    aria-expanded={winEdit?.id === f.id}
+                    aria-label={`${f.name} 한시적 무료 기간 설정`}
+                    title="한시적 무료 기간 설정"
+                    className={`flex min-h-[44px] items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                      win === "active" || win === "upcoming"
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-zinc-300 text-zinc-400 hover:border-emerald-500 hover:text-emerald-600 dark:border-zinc-700"
+                    }`}
+                  >
+                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                    기간
+                  </button>
+                )}
+                {adminOn && (
+                  <button
+                    type="button"
                     onClick={() => remove(f)}
                     disabled={Boolean(busy)}
                     aria-label={`${f.name} 삭제`}
@@ -448,6 +543,67 @@ export default function LibrarySection() {
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
+                )}
+                {adminOn && winEdit?.id === f.id && (
+                  <form
+                    className="flex basis-full flex-wrap items-end gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveFreeWindow(winEdit.start, winEdit.end);
+                    }}
+                  >
+                    <p className="basis-full text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                      기간 안에는 <b>일반회원 포함 모두</b> 다운로드할 수 있고, 시작 전과 종료 후에는{" "}
+                      <b className="text-amber-500">VIP(유료회원 이상) 전용</b>입니다. 한국시간 기준이며
+                      종료일 당일 23:59까지 포함됩니다.
+                    </p>
+                    <label className="flex flex-col gap-1 text-xs font-semibold">
+                      시작일
+                      <input
+                        type="date"
+                        required
+                        value={winEdit.start}
+                        max={winEdit.end || undefined}
+                        onChange={(e) => setWinEdit({ ...winEdit, start: e.target.value })}
+                        className="min-h-[44px] rounded-md border border-zinc-300 bg-background px-2 text-sm dark:border-zinc-700"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold">
+                      종료일
+                      <input
+                        type="date"
+                        required
+                        value={winEdit.end}
+                        min={winEdit.start || undefined}
+                        onChange={(e) => setWinEdit({ ...winEdit, end: e.target.value })}
+                        className="min-h-[44px] rounded-md border border-zinc-300 bg-background px-2 text-sm dark:border-zinc-700"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={Boolean(busy)}
+                      className="min-h-[44px] rounded-full bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      저장
+                    </button>
+                    {f.freeStart && (
+                      <button
+                        type="button"
+                        onClick={() => saveFreeWindow("", "")}
+                        disabled={Boolean(busy)}
+                        className="min-h-[44px] rounded-full border border-zinc-300 px-4 text-sm font-semibold text-zinc-600 hover:border-red-400 hover:text-red-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+                      >
+                        기간 해제
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setWinEdit(null)}
+                      className="min-h-[44px] rounded-full px-3 text-sm text-zinc-500 hover:text-foreground"
+                    >
+                      취소
+                    </button>
+                  </form>
                 )}
               </article>
               );
