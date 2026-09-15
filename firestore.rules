@@ -1,9 +1,9 @@
 rules_version = '2';
 
 // 25WORLD Firestore 보안 규칙 (전체)
-// 정적 호스팅(Netlify) + 클라이언트 Firebase 구조라, 앱이 쓰는 모든 컬렉션은
-// 클라이언트에서 read/write 가 가능해야 한다. 하드 보안이 아닌 UX 수준 게이팅.
-// ── 새로 추가: stats (방문자 집계) ──────────────────────────
+// 정적 호스팅(Netlify) + 클라이언트 Firebase 구조라, 앱이 쓰는 대부분의 컬렉션은
+// 클라이언트에서 read/write 가 가능해야 한다.
+// 단, 회원 명부(users)는 개인정보라 본인·관리자만 접근한다 (2026-09-16).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -28,8 +28,46 @@ service cloud.firestore {
     }
 
     // 회원 프로필·등급 (users/{uid})
+    // 2026-09-16 — 예전에는 "누구나 읽고 쓰기"라 공개 웹 API 키만으로 회원 전체의 이메일·등급이
+    // 보였고, 회원이 자기 group 을 paid 로 바꾸는 자가 승격도 가능했다.
+    //   · 읽기: 본인 문서만. 전체 목록은 관리자만
+    //   · 본인 생성·수정: 이름·사진·테마 등은 자유, group·role·유튜브 무료횟수는 못 바꾼다
+    //     (없던 group/role 에 기본값을 채우는 것만 허용 — 로그인 시 프로필 등록용)
+    //   · 관리자: 주인장 구글 계정(이메일 인증됨), 또는 관리자가 group=admin 으로 지정한 계정
+    //   · tg-post-saver 서버는 firebase-admin(서비스 계정)으로 접근해 이 규칙을 거치지 않는다
     match /users/{uid} {
-      allow read, write: if true;
+      function signedIn() {
+        return request.auth != null;
+      }
+      function isOwner() {
+        return signedIn() && request.auth.uid == uid;
+      }
+      function isAdmin() {
+        return signedIn() && (
+          (request.auth.token.email == 'herhero78@gmail.com'
+            && request.auth.token.email_verified == true)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('group', '') == 'admin')
+        );
+      }
+      // 본인이 바꿀 수 없는 필드를 건드리지 않았는가
+      function ownerSafeUpdate(before, after) {
+        let changed = after.diff(before).affectedKeys();
+        return !changed.hasAny(['ytFreeUsed', 'ytLastFreeAt'])
+          && (!changed.hasAny(['group']) || (!('group' in before) && after.group == 'general'))
+          && (!changed.hasAny(['role']) || (!('role' in before) && after.role == 'user'));
+      }
+
+      allow get: if isOwner() || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        isOwner()
+          && request.resource.data.get('group', 'general') == 'general'
+          && request.resource.data.get('role', 'user') == 'user'
+          && !request.resource.data.keys().hasAny(['ytFreeUsed', 'ytLastFreeAt'])
+      );
+      allow update: if isAdmin() || (isOwner() && ownerSafeUpdate(resource.data, request.resource.data));
+      allow delete: if isAdmin();
     }
 
     // 사이트 표시 설정·유료 지정 (siteMeta/config)

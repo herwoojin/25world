@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-09-13**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-09-16**
 
 ## 아키텍처
 
@@ -35,7 +35,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 카카오 로그인 | — | 구글 옆 카카오 로그인 (code→커스텀 토큰) | `lib/kakao.ts`, `app/kakao/page.tsx`, `netlify/functions/kakao-auth.mjs` | **Netlify Function(무료·상시)** 이 카카오 토큰 교환 + `node:crypto` RS256 로 Firebase 커스텀 토큰 서명(uid=`kakao_{id}`). Render 의존 제거. 시크릿은 Netlify env 에만 |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트·글별 VIP 지정 | `components/blog-section.tsx`, `lib/previews.ts` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트). 관리자가 `previews/{id}.paid`로 유료 전용 지정 → 일반회원은 목록엔 보이되 열람 차단(카드/리스트/`/post` 모두 UI 게이트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭. `scripts/blog-webapp.gs`(posts+sites 겸용). savedAt 은 시트 자동 날짜 인식을 막기 위해 일반 텍스트로 고정 저장(2026-08-04, 9시간 시간대 오인식 버그 수정) |
-| 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts` | Firestore `users/{uid}.group` |
+| 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts`, `firestore.rules` | Firestore `users/{uid}.group`. 규칙(2026-09-16): 본인 문서만 읽기, 목록·등급 변경·삭제는 관리자(주인장 구글 계정 또는 group=admin)만, 본인은 group·role·유튜브 무료횟수 변경 불가. 배포: `firebase deploy --only firestore:rules --project jini-vibe-coding` |
 | 유튜브→블로그 무료 이용 한도 | — | 일반회원 최초 5회 + 이후 7일 1회 무료, 유료회원 무제한 | `components/youtube-request.tsx` | 실제 횟수 관리는 tg-post-saver 서버(`yt-quota.js`)가 Firebase ID 토큰으로 본인 확인 후 처리 — 프론트는 안내문만 표시 |
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상(한시적 무료 기간엔 모두), 업로드·삭제·VIP·기간 지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`VIP_FILES`), 무료 기간(`FREE_WINDOWS`, 한국시간·종료일 포함). **다운로드는 tg-post-saver 가 대행** — `/api/library/ticket` → Apps Script `authorize`(판정) → 서버가 드라이브에서 스트리밍. 이메일 없는 카카오 회원·구글 미로그인 브라우저도 가능 |
 | 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
@@ -64,3 +64,4 @@ out/  ──────────────►  Netlify 정적 호스팅
 - 유료회원 판정 근거를 Firestore 가 아니라 Apps Script 속성에 두는 이유: `users/{uid}` 는 클라이언트가 쓸 수 있어(규칙이 개방형) 등급 자가 승격이 가능하다. 등급 변경 후에는 관리자 화면에서 **동기화**를 눌러야 서버 목록에 반영된다.
 - 업로드는 **브라우저 → 드라이브 직접(resumable)** 경로가 기본이라 파일 크기 제약이 사실상 없다(가드 2GB, 실질 상한은 계정 저장용량 15GB). Apps Script 는 1회성 OAuth 토큰만 발급한다. 구버전 웹앱이면 base64 폴백(≤30MB)으로 자동 전환.
 - **관리자 키·서버 비밀값은 코드에 두지 않는다** (2026-09-13): 이 저장소는 공개라 예전 `ADMIN_KEY` 가 누구에게나 보였다(사이트 관리자 버튼 툴팁에도 노출). 그 키로 자료실 `token` 을 부르면 소유자 드라이브 토큰까지 받을 수 있었다. 이제 두 Apps Script 모두 **스크립트 속성**(`ADMIN_KEY`, 자료실은 `SERVER_SECRET` 추가)에서 읽고, 값이 비어 있으면 어떤 요청도 관리자로 인정하지 않는다. 옛 키는 git 기록에 남아 있으므로 반드시 새 값으로 교체한다.
+- **회원 명부(users)는 규칙으로 잠근다** (2026-09-16): 예전 규칙이 "누구나 읽고 쓰기"라 공개 웹 API 키만으로 회원 전체의 이메일·등급을 읽을 수 있었고, 회원이 자기 등급을 paid 로 올리는 것도 가능했다. 이제 본인 문서만 읽고, 목록·등급 변경은 관리자만 한다. 서버(tg-post-saver)는 firebase-admin 으로 접근한다. 나머지 컬렉션은 여전히 개방형이다.
