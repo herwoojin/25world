@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-09-16**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-10-09**
 
 ## 아키텍처
 
@@ -35,6 +35,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 카카오 로그인 | — | 구글 옆 카카오 로그인 (code→커스텀 토큰) | `lib/kakao.ts`, `app/kakao/page.tsx`, `netlify/functions/kakao-auth.mjs` | **Netlify Function(무료·상시)** 이 카카오 토큰 교환 + `node:crypto` RS256 로 Firebase 커스텀 토큰 서명(uid=`kakao_{id}`). Render 의존 제거. 시크릿은 Netlify env 에만 |
 | 블로그 섹션 | — | 저장 글 목록·새 창 읽기·다운로드·하트·글별 VIP 지정 | `components/blog-section.tsx`, `lib/previews.ts` | 목록=Apps Script, 본문=Firestore, 좋아요=Firestore likes(1인 1하트). 관리자가 `previews/{id}.paid`로 유료 전용 지정 → 일반회원은 목록엔 보이되 열람 차단(카드/리스트/`/post` 모두 UI 게이트) |
 | 동적 사이트 | — | 관리자 모드에서 사이트 추가/수정/삭제 — 재배포 없이 즉시 반영 | `lib/use-sites.ts`, `components/site-admin.tsx` | 구글시트 'sites' 탭. `scripts/blog-webapp.gs`(posts+sites 겸용). savedAt 은 시트 자동 날짜 인식을 막기 위해 일반 텍스트로 고정 저장(2026-08-04, 9시간 시간대 오인식 버그 수정) |
+| 관리자 콘솔 (/admin) | — | 관리 UI 를 별도 페이지로 분리 — 메인 페이지 경량화 | `app/admin/page.tsx`, `components/admin/library-settings.tsx`, `lib/admin.ts` | 회원 등급·사이트/카테고리·자료실 설정을 메인에서 제거(홈 First Load JS 316→308 kB). 탭별 `next/dynamic` 지연 로딩. 상태 헬퍼(`lib/admin.ts`)를 버튼 UI 와 분리해 글 페이지가 Link·라우터를 끌고 오지 않게 함. 글·파일 단위 작업은 현장(관리자 모드)에 유지 |
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts`, `firestore.rules` | Firestore `users/{uid}.group`. 규칙(2026-09-16): 본인 문서만 읽기, 목록·등급 변경·삭제는 관리자(주인장 구글 계정 또는 group=admin)만, 본인은 group·role·유튜브 무료횟수 변경 불가. 배포: `firebase deploy --only firestore:rules --project jini-vibe-coding` |
 | 유튜브→블로그 무료 이용 한도 | — | 일반회원 최초 5회 + 이후 7일 1회 무료, 유료회원 무제한 | `components/youtube-request.tsx` | 실제 횟수 관리는 tg-post-saver 서버(`yt-quota.js`)가 Firebase ID 토큰으로 본인 확인 후 처리 — 프론트는 안내문만 표시 |
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상(한시적 무료 기간엔 모두), 업로드·삭제·VIP·기간 지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`VIP_FILES`), 무료 기간(`FREE_WINDOWS`, 한국시간·종료일 포함). **다운로드는 tg-post-saver 가 대행** — `/api/library/ticket` → Apps Script `authorize`(판정) → 서버가 드라이브에서 스트리밍. 이메일 없는 카카오 회원·구글 미로그인 브라우저도 가능 |

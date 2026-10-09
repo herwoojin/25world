@@ -30,7 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
-import { useAdminOn } from "@/components/admin-button";
+import { useAdminOn } from "@/lib/admin";
 import { useEffectiveGroup } from "@/lib/membership";
 import {
   saveSiteCoreNote,

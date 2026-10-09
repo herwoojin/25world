@@ -10,7 +10,7 @@ import { doc, getDoc, getFirestore } from "firebase/firestore";
 import { fetchPostHtml } from "@/lib/posts";
 import { getFirebaseApp, getFirebaseAuth } from "@/lib/firebase";
 import { useMyProfile } from "@/lib/membership";
-import { useAdminOn } from "@/components/admin-button";
+import { useAdminOn } from "@/lib/admin";
 
 export default function PostPage() {
   // undefined = 로딩 중, null = 없음, string = 본문

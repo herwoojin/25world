@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Trash2, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAdminOn } from "@/components/admin-button";
+import { useAdminOn } from "@/lib/admin";
 import {
   GROUPS,
   deleteUserProfile,

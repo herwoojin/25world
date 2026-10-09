@@ -1,5 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 // 하단 블로그 섹션 — 텔레그램 "글 저장" 봇으로 쌓인 글을 보여준다.
 // 목록: 구글시트 Apps Script 웹앱 / 본문: Firestore(posts) → Storage 폴백
 // 좋아요: Firestore likes 컬렉션 — 문서 id `{postId}_{uid}` 로 1인 1하트 보장
@@ -33,10 +35,15 @@ import PostAudio from "@/components/post-audio";
 import PostCard from "@/components/post-card";
 import YoutubeRequest from "@/components/youtube-request";
 import ActionMenu from "@/components/action-menu";
-import NaverCopyDialog from "@/components/naver-copy-dialog";
+
 import { NotebookLMButton } from "@/components/notebooklm/notebooklm-button";
 import { loadMyFavorites, toggleFavorite } from "@/lib/favorites";
-import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
+import { ADMIN_EVENT, getAdminKey } from "@/lib/admin";
+
+// 관리자 전용 — 창을 열 때만 내려받아 일반 방문자 번들에서 뺀다
+const NaverCopyDialog = dynamic(() => import("@/components/naver-copy-dialog"), {
+  ssr: false,
+});
 import { beginLoading, endLoading } from "@/lib/loading-bus";
 import { fetchPostHtml, formatKST, postHtmlDocs } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";

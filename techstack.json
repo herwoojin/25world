@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-09-16",
+  "lastUpdated": "2026-10-09",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -62,6 +62,11 @@
           "name": "에이전트 협업 연출 (연동테스트중)",
           "purpose": "카테고리 궤도 중앙 허브 클릭 시 각 사이트로 입자가 튀는 애니메이션 — 실제 자동화 없는 순수 시각 연출. CSS keyframe(agent-particle-travel)",
           "config": "components/category-orbital.tsx, app/globals.css"
+        },
+        {
+          "name": "관리자 콘솔 (/admin)",
+          "purpose": "회원 등급·사이트/카테고리·자료실 설정을 메인 페이지에서 떼어낸 별도 관리자 페이지 — 메인 번들 경량화",
+          "config": "app/admin/page.tsx · components/admin/library-settings.tsx · lib/admin.ts(상태 전용 경량 모듈). 탭별 next/dynamic 지연 로딩. 글·파일 단위 작업(글 등록/VIP 지정, 파일 업로드/무료기간)은 현장에 남아 관리자 모드에서만 표시"
         }
       ]
     },

@@ -13,7 +13,7 @@ import {
 import { getFirebaseAuth } from "@/lib/firebase";
 import { startKakaoLogin } from "@/lib/kakao";
 import { upsertUserProfile } from "@/lib/membership";
-import { clearAdminKey } from "@/components/admin-button";
+import { clearAdminKey } from "@/lib/admin";
 import { GradientWave } from "@/components/ui/gradient-wave";
 import { Button } from "@/components/ui/button";
 import { SITES, getCategoryColor } from "@/lib/sites";

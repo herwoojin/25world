@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseApp, getFirebaseAuth } from "@/lib/firebase";
-import { useAdminOn } from "@/components/admin-button";
+import { useAdminOn } from "@/lib/admin";
 import { useSiteConfig } from "@/lib/site-config";
 import { useSites } from "@/lib/use-sites";
 import type { Site } from "@/lib/sites";

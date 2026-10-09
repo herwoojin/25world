@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ADMIN_EVENT, getAdminKey } from "@/components/admin-button";
+import { ADMIN_EVENT, getAdminKey } from "@/lib/admin";
 import { CATEGORIES, SITES } from "@/lib/sites";
 import { useCategories, useSites, webappPost } from "@/lib/use-sites";
 import { DEFAULT_PAID_SITE_IDS } from "@/lib/membership";

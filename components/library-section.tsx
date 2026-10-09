@@ -17,11 +17,11 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAdminKey, useAdminOn } from "@/components/admin-button";
+import { getAdminKey, useAdminOn } from "@/lib/admin";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { beginLoading, endLoading } from "@/lib/loading-bus";
-import { listUsers, useEffectiveGroup } from "@/lib/membership";
-import { useSiteConfig, saveSiteConfig } from "@/lib/site-config";
+import { useEffectiveGroup } from "@/lib/membership";
+import { useSiteConfig } from "@/lib/site-config";
 import {
   MAX_UPLOAD_MB,
   deleteLibraryFile,
@@ -30,11 +30,9 @@ import {
   freeWindowStatus,
   listLibraryFiles,
   requestLibraryDownload,
-  revokeAllAccess,
   setLibraryFreeWindow,
   setLibraryVip,
   shortDate,
-  syncPaidEmails,
   uploadLibraryFile,
   type LibraryFile,
 } from "@/lib/library";
@@ -67,7 +65,6 @@ export default function LibrarySection() {
   const [files, setFiles] = useState<LibraryFile[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [urlDraft, setUrlDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 섹션 접기 — 제목만 남기고 숨기기.
@@ -165,37 +162,6 @@ export default function LibrarySection() {
     setBusy("");
   };
 
-  // 유료회원 이메일을 웹앱에 밀어 넣는다 — 서버가 이 목록으로 다운로드를 판정한다
-  const syncPaid = async () => {
-    setBusy("유료회원 목록 동기화 중…");
-    setError("");
-    try {
-      const users = await listUsers();
-      const paidUsers = users.filter((u) => u.group !== "general");
-      const emails = paidUsers.filter((u) => u.email).map((u) => u.email);
-      // 이메일이 없는 카카오 유료회원도 서버가 판정할 수 있도록 회원 ID 도 함께 보낸다
-      const uids = paidUsers.map((u) => u.uid);
-      const n = await syncPaidEmails(url, getAdminKey(), emails, uids);
-      setBusy("");
-      window.alert(`유료회원 이상 ${n}명의 다운로드 권한을 동기화했습니다.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "동기화에 실패했습니다.");
-      setBusy("");
-    }
-  };
-
-  const revokeAll = async () => {
-    if (!window.confirm("지금까지 부여된 파일 열람 권한을 모두 회수할까요?")) return;
-    setBusy("권한 회수 중…");
-    try {
-      const n = await revokeAllAccess(url, getAdminKey());
-      window.alert(`${n}건의 열람 권한을 회수했습니다.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "회수에 실패했습니다.");
-    }
-    setBusy("");
-  };
-
   const remove = async (f: LibraryFile) => {
     if (!window.confirm(`"${f.name}" 을(를) 삭제할까요? (드라이브 휴지통으로 이동)`)) return;
     setBusy("삭제 중…");
@@ -281,16 +247,6 @@ export default function LibrarySection() {
     setBusy("");
   };
 
-  const saveUrl = async () => {
-    const v = urlDraft.trim();
-    if (v && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
-      setError("Apps Script 웹앱의 /exec 로 끝나는 URL 을 넣어주세요.");
-      return;
-    }
-    await saveSiteConfig({ ...cfg, libraryUrl: v });
-    setUrlDraft("");
-  };
-
   const heading = (
     <h2 className="flex items-center gap-3 text-2xl font-bold tracking-tight">
       <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full bg-zinc-400" />
@@ -337,57 +293,6 @@ export default function LibrarySection() {
         우리 모두가 만든 자료입니다. 상상은 현실이 되는 AI시대, 같이 공유드립니다.
       </p>
 
-      {/* 관리자 모드: 웹앱 URL 설정 (한 번만) */}
-      {adminOn && (
-        <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm">
-          <p className="font-semibold text-amber-500">
-            관리자 — 자료실 드라이브 연결
-          </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {url ? (
-              <>
-                현재 연결됨: <span className="break-all">{url}</span>
-              </>
-            ) : (
-              <>
-                <code>scripts/library-webapp.gs</code> 를 Apps Script 에 배포한 뒤
-                받은 /exec URL 을 넣어주세요.
-              </>
-            )}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <input
-              type="url"
-              value={urlDraft}
-              onChange={(e) => setUrlDraft(e.target.value)}
-              placeholder="https://script.google.com/macros/s/…/exec"
-              className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
-            />
-            <Button onClick={saveUrl} disabled={!urlDraft.trim()}>
-              연결 저장
-            </Button>
-          </div>
-
-          {url && (
-            <>
-              <div className="mt-3 flex flex-wrap gap-2 border-t border-amber-400/20 pt-3">
-                <Button variant="outline" onClick={syncPaid} disabled={Boolean(busy)}>
-                  유료회원 권한 동기화
-                </Button>
-                <Button variant="outline" onClick={revokeAll} disabled={Boolean(busy)}>
-                  열람 권한 전체 회수
-                </Button>
-              </div>
-              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                회원 등급을 바꾼 뒤에는 <b>동기화</b>를 눌러야 서버의 다운로드
-                허용 목록에 반영됩니다. 등급이 내려간 사람의 기존 권한은{" "}
-                <b>전체 회수</b> 후 다시 동기화하면 정리됩니다.
-              </p>
-            </>
-          )}
-        </div>
-      )}
-
       {/* 일반회원 안내 — 목록은 보이되 zip 은 잠긴다 */}
       {!paidUp && (
         <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/5 px-4 py-2.5 text-sm text-amber-500">
@@ -404,6 +309,15 @@ export default function LibrarySection() {
       {!url && (
         <p className="mt-4 rounded-xl border border-zinc-200 bg-background/60 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
           자료실이 아직 준비 중입니다.
+          {adminOn && (
+            <>
+              {" "}
+              <a href="/admin" className="font-semibold text-amber-500 underline-offset-4 hover:underline">
+                관리자 페이지
+              </a>
+              에서 드라이브를 연결해 주세요.
+            </>
+          )}
         </p>
       )}
 
