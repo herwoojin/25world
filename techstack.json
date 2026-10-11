@@ -106,7 +106,7 @@
         {
           "name": "듀얼 브레인 (블로그 지식베이스 Q&A + Task Graph)",
           "purpose": "블로그 섹션에서 질문 → 저장된 블로그 글을 근거로 AI 답변. 질문 분석·검색·후보 글·관련성 판정·답변 분기(지식베이스/LLM 단독)를 SVG task graph 로 실시간 표시하고, 답변의 [n] 출처를 원문 글로 연결. 관련 글이 없으면 '지식베이스에 없음' 안내 후 LLM 일반 지식으로만 답변",
-          "config": "components/blog-ask.tsx (next/dynamic 지연 로딩), app/globals.css(.kb-flow). 백엔드 tg-post-saver kb.js · POST /api/kb/ask (NDJSON 스트림, Firebase ID 토큰 필수). 유료회원 이상 전용(일반회원은 잠금 안내). 내 질문 기록 = Firestore users/{uid}/kbChats(서버만 저장, 규칙상 본인만 읽기·삭제) — 기록을 누르면 그래프·답변을 다시 표시"
+          "config": "components/blog-ask.tsx (next/dynamic 지연 로딩), app/globals.css(.kb-flow). 백엔드 tg-post-saver kb.js · POST /api/kb/ask (NDJSON 스트림, Firebase ID 토큰 필수). 유료회원 이상 전용(일반회원은 잠금 안내). 내 질문 기록 = Firestore users/{uid}/kbChats(서버만 저장, 규칙상 본인만 읽기·삭제) — 기록을 누르면 그래프·답변을 다시 표시. 참고한 글 → NotebookLM 패널: 글 전체 텍스트를 한 번에 복사(질문 머리말 + [n] 제목·출처·본문, 패널 표시 시 본문 미리 수집) / URL(/r/{id}) 복사 / NotebookLM 열기 — 복사 도우미는 하단 트레이와 공용(components/notebooklm/nlm-copy.ts)"
         },
         {
           "name": "관리자 키 (id:pass)",

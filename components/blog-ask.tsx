@@ -18,11 +18,30 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { BrainCircuit, ChevronDown, CircleStop, History, Lock, Send, Trash2 } from "lucide-react";
+import {
+  BrainCircuit,
+  ChevronDown,
+  CircleStop,
+  ExternalLink,
+  FileText,
+  History,
+  Link2,
+  Lock,
+  NotebookPen,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BOT_SERVER_URL, getFirebaseApp, getFirebaseAuth } from "@/lib/firebase";
 import { OWNER_EMAIL, useEffectiveGroup, useMyProfile } from "@/lib/membership";
 import { formatKST } from "@/lib/posts";
+import {
+  NLM_SEPARATOR,
+  NLM_URL,
+  copyToClipboard,
+  nlmCrawlUrl,
+  postSourceBlock,
+} from "@/components/notebooklm/nlm-copy";
 
 type StepId = "analyze" | "search" | "judge" | "answer";
 type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -676,6 +695,120 @@ function AnswerText({ text, sources }: { text: string; sources: Source[] }) {
   );
 }
 
+// ── 참고한 글 → NotebookLM 소스 ──────────────────────────
+// 참고한 글 전체 텍스트를 한 번에 복사해 NotebookLM "복사된 텍스트" 소스로 붙여넣게 한다.
+// 본문은 패널이 뜰 때 미리 받아 둔다 — 누르는 즉시 복사돼야 브라우저가 클립보드 쓰기를 막지 않는다.
+function NotebookLMPanel({ question, sources }: { question: string; sources: Source[] }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const blocksRef = useRef<Promise<string[]> | null>(null);
+
+  useEffect(() => {
+    blocksRef.current = Promise.all(
+      sources.map((s) =>
+        postSourceBlock({
+          id: s.id,
+          title: `[${s.n}] ${s.title}`,
+          url: `${window.location.origin}${postHref(s.id)}`,
+        }),
+      ),
+    );
+  }, [sources]);
+
+  const copyText = async () => {
+    if (busy || !blocksRef.current) return;
+    setBusy(true);
+    try {
+      const blocks = await blocksRef.current;
+      const text = [`[듀얼 브레인 참고 자료] 질문: ${question}`, ...blocks].join(NLM_SEPARATOR);
+      const ok = await copyToClipboard(text);
+      setMsg(
+        ok
+          ? {
+              ok,
+              text: `✓ 글 ${sources.length}개 전체 텍스트를 복사했어요 (${text.length.toLocaleString()}자) — 이제 NotebookLM 에 붙여넣으세요`,
+            }
+          : { ok, text: "복사에 실패했어요. 한 번 더 눌러 주세요." },
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyUrls = async () => {
+    const ok = await copyToClipboard(sources.map((s) => nlmCrawlUrl(s.id)).join("\n"));
+    setMsg(
+      ok
+        ? {
+            ok,
+            text: `✓ 글 ${sources.length}개 주소를 복사했어요 — NotebookLM 소스 추가 → "웹사이트"에 붙여넣으세요`,
+          }
+        : { ok, text: "복사에 실패했어요. 한 번 더 눌러 주세요." },
+    );
+  };
+
+  const btn =
+    "flex min-h-[40px] items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
+
+  return (
+    <div className="mt-3 rounded-lg border border-emerald-400/40 bg-emerald-400/5 p-3">
+      <p className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+        <NotebookPen className="h-3.5 w-3.5" aria-hidden="true" />
+        참고한 글 {sources.length}개를 NotebookLM 소스로
+      </p>
+      <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+        글 전체 텍스트를 한 번에 복사해 NotebookLM 에 붙여넣으면, 이 글들로 슬라이드·보고서를 만들
+        수 있어요.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={copyText}
+          disabled={busy}
+          className={`${btn} bg-emerald-600 hover:bg-emerald-700`}
+        >
+          <FileText className="h-4 w-4" aria-hidden="true" />
+          {busy ? "글 모으는 중…" : "NotebookLM용 텍스트 복사"}
+        </button>
+        <a
+          href={NLM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${btn} bg-blue-600 hover:bg-blue-700`}
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          NotebookLM 열기
+        </a>
+        <button type="button" onClick={copyUrls} className={`${btn} bg-zinc-600 hover:bg-zinc-500`}>
+          <Link2 className="h-4 w-4" aria-hidden="true" />
+          URL 복사
+        </button>
+      </div>
+      {msg && (
+        <p
+          role="status"
+          className={`mt-2 text-xs font-semibold ${msg.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}
+        >
+          {msg.text}
+        </p>
+      )}
+      <ol className="mt-2 space-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <li>
+          ① <b className="text-foreground">NotebookLM용 텍스트 복사</b> 누르기
+        </li>
+        <li>
+          ② <b className="text-foreground">NotebookLM 열기</b> → 새 노트북 → 소스 추가 →{" "}
+          <b className="text-foreground">복사된 텍스트</b>에 붙여넣기
+        </li>
+        <li>
+          ③ 오른쪽 스튜디오에서 <b className="text-foreground">슬라이드</b> 또는{" "}
+          <b className="text-foreground">보고서</b> 만들기
+        </li>
+      </ol>
+    </div>
+  );
+}
+
 export default function BlogAsk() {
   const [question, setQuestion] = useState("");
   const [run, setRun] = useState<Run | null>(null);
@@ -938,6 +1071,13 @@ export default function BlogAsk() {
                       </li>
                     ))}
                   </ol>
+                  {run.done && (
+                    <NotebookLMPanel
+                      key={run.savedId ?? run.startedAt}
+                      question={run.question}
+                      sources={run.sources}
+                    />
+                  )}
                 </div>
               )}
 

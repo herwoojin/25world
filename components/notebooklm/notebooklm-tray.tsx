@@ -1,13 +1,10 @@
 "use client";
 
 // 하단 플로팅 액션 바 — 선택한 글을 NotebookLM 소스로 복사한다.
-// (NotebookLM 은 외부 주입 API 가 없으므로 클립보드 복사 + 새 탭 열기가 유일한 안정 경로)
 import { useEffect, useState } from "react";
 import { ExternalLink, FileText, Link2, X } from "lucide-react";
 import { useNlm } from "./nlm-context";
-import { extractPlainText, fetchPostHtml } from "@/lib/posts";
-
-const NLM_URL = "https://notebooklm.google.com/";
+import { NLM_SEPARATOR, NLM_URL, copyToClipboard, nlmCrawlUrl, postSourceBlock } from "./nlm-copy";
 
 export function NotebookLMTray() {
   const { selected, clear } = useNlm();
@@ -31,44 +28,12 @@ export function NotebookLMTray() {
     setTimeout(() => setToast(null), 2600);
   };
 
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // 클립보드 API 실패(비 HTTPS 등) 폴백
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-  };
-
   const copyText = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const blocks = await Promise.all(
-        items.map(async (i) => {
-          // 본문이 없으면 Firestore 에서 가져와 순수 텍스트로 변환 (없으면 제목+URL만)
-          let body = i.text?.trim() ?? "";
-          if (!body) {
-            const html = await fetchPostHtml(i.id).catch(() => null);
-            if (html) body = extractPlainText(html);
-          }
-          return `# ${i.title}\n출처: ${i.url}\n\n${body || "(본문 없음)"}`;
-        })
-      );
-      const ok = await copy(blocks.join("\n\n---\n\n"));
+      const blocks = await Promise.all(items.map(postSourceBlock));
+      const ok = await copyToClipboard(blocks.join(NLM_SEPARATOR));
       show(ok ? `${count}개 글 텍스트 복사됨` : "복사에 실패했습니다");
     } finally {
       setBusy(false);
@@ -76,11 +41,7 @@ export function NotebookLMTray() {
   };
 
   const copyUrls = async () => {
-    // NotebookLM 크롤러는 서버 HTML만 읽으므로, 본문을 그대로 내려주는 /r/{id} 주소를 준다
-    const urls = items.map(
-      (i) => `${window.location.origin}/r/${encodeURIComponent(i.id)}`
-    );
-    const ok = await copy(urls.join("\n"));
+    const ok = await copyToClipboard(items.map((i) => nlmCrawlUrl(i.id)).join("\n"));
     show(ok ? `${count}개 URL 복사됨` : "복사에 실패했습니다");
   };
 
@@ -88,9 +49,7 @@ export function NotebookLMTray() {
     <>
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4">
         <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-zinc-900/95 px-3 py-2 shadow-xl ring-1 ring-white/10 backdrop-blur">
-          <span className="px-2 text-sm font-semibold text-zinc-300">
-            📓 {count}개 선택
-          </span>
+          <span className="px-2 text-sm font-semibold text-zinc-300">📓 {count}개 선택</span>
 
           <button
             type="button"
