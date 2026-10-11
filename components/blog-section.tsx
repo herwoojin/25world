@@ -44,6 +44,7 @@ import { ADMIN_EVENT, getAdminKey } from "@/lib/admin";
 const NaverCopyDialog = dynamic(() => import("@/components/naver-copy-dialog"), {
   ssr: false,
 });
+const BlogAsk = dynamic(() => import("@/components/blog-ask"), { ssr: false });
 import { beginLoading, endLoading } from "@/lib/loading-bus";
 import { fetchPostHtml, formatKST, postHtmlDocs } from "@/lib/posts";
 import { BLOG_CATS, blogCat, type BlogCatId } from "@/lib/blog-categories";
@@ -536,6 +537,9 @@ export default function BlogSection() {
 
       {/* 유료회원 전용 — 유튜브 URL → 블로그 HTML 이메일 변환 */}
       <YoutubeRequest />
+
+      {/* 듀얼 브레인 — 블로그 글을 지식베이스로 질문·답변 (과정을 task graph 로 표시) */}
+      <BlogAsk />
 
       {adminKey && (
         <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">

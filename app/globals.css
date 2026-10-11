@@ -238,3 +238,19 @@
     opacity: 0;
   }
 }
+
+/* 듀얼 브레인 task graph — 진행 중인 간선 위로 점선이 흘러간다 */
+@keyframes kb-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.kb-flow {
+  stroke-dasharray: 6 4;
+  animation: kb-dash 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kb-flow {
+    animation: none;
+  }
+}

@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-10-09",
+  "lastUpdated": "2026-10-11",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -102,6 +102,11 @@
           "name": "유튜브→블로그 변환 무료 이용 한도",
           "purpose": "일반회원: 최초 5회 무료 + 이후 7일에 1회 무료 / 유료회원 이상: 무제한. Firebase ID 토큰을 tg-post-saver 서버로 보내 본인 확인 후 서버측(Firestore users/{uid})에서 횟수를 관리 — 클라이언트는 안내 문구만 표시",
           "config": "components/youtube-request.tsx (tg-post-saver: yt-quota.js)"
+        },
+        {
+          "name": "듀얼 브레인 (블로그 지식베이스 Q&A + Task Graph)",
+          "purpose": "블로그 섹션에서 질문 → 저장된 블로그 글을 근거로 AI 답변. 질문 분석·검색·후보 글·관련성 판정·답변 분기(지식베이스/LLM 단독)를 SVG task graph 로 실시간 표시하고, 답변의 [n] 출처를 원문 글로 연결. 관련 글이 없으면 '지식베이스에 없음' 안내 후 LLM 일반 지식으로만 답변",
+          "config": "components/blog-ask.tsx (next/dynamic 지연 로딩), app/globals.css(.kb-flow). 백엔드 tg-post-saver kb.js · POST /api/kb/ask (NDJSON 스트림, Firebase ID 토큰 필수)"
         },
         {
           "name": "관리자 키 (id:pass)",
