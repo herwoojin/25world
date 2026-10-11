@@ -33,6 +33,10 @@ export const GROUPS: { id: Group; label: string }[] = [
 
 const RANK: Record<Group, number> = { general: 0, paid: 1, vip: 2, admin: 3 };
 
+/** 주인장 구글 계정 — firestore.rules isAdmin·tg-post-saver kb.js 와 같은 값.
+ *  users 문서 등급과 무관하게 관리자로 취급한다 */
+export const OWNER_EMAIL = "herhero78@gmail.com";
+
 export function groupLabel(g: Group): string {
   return GROUPS.find((x) => x.id === g)?.label ?? "일반회원";
 }

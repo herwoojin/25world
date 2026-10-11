@@ -68,6 +68,13 @@ service cloud.firestore {
       );
       allow update: if isAdmin() || (isOwner() && ownerSafeUpdate(resource.data, request.resource.data));
       allow delete: if isAdmin();
+
+      // 듀얼 브레인 질문·답변 기록 (users/{uid}/kbChats/{chatId}) — 2026-10-11
+      //   · 본인만 읽고 지운다. 관리자도 남의 기록은 못 본다
+      //   · 저장은 tg-post-saver 서버(firebase-admin)만 — 클라이언트 쓰기 금지
+      match /kbChats/{chatId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
     // 사이트 표시 설정·유료 지정 (siteMeta/config)

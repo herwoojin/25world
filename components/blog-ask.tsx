@@ -5,10 +5,24 @@
 // 질문 → 분석 → 검색 → 후보 글 → 관련성 판정 → (지식베이스 답변 | LLM 단독 답변)
 // → 최종 답변 순서의 task graph 로 실시간 표시한다.
 // 관련 글이 없으면 "지식베이스에 없음"을 알리고 LLM 일반 지식으로만 답한다.
-import { useEffect, useRef, useState } from "react";
-import { BrainCircuit, CircleStop, Send } from "lucide-react";
+// 유료회원 이상 전용. 끝난 질문·답변은 서버가 users/{uid}/kbChats 에 저장하고,
+// 규칙상 본인만 읽고 지울 수 있다 — 기록을 누르면 그래프·답변을 그대로 다시 보여준다.
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  getFirestore,
+  limit,
+  orderBy,
+  query,
+} from "firebase/firestore";
+import { BrainCircuit, ChevronDown, CircleStop, History, Lock, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BOT_SERVER_URL, getFirebaseAuth } from "@/lib/firebase";
+import { BOT_SERVER_URL, getFirebaseApp, getFirebaseAuth } from "@/lib/firebase";
+import { OWNER_EMAIL, useEffectiveGroup, useMyProfile } from "@/lib/membership";
+import { formatKST } from "@/lib/posts";
 
 type StepId = "analyze" | "search" | "judge" | "answer";
 type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -49,10 +63,50 @@ interface Run {
   answer: string;
   done: boolean;
   error?: string;
+  /** 내 질문 기록 문서 id · 저장 시각 (저장 후 또는 기록에서 연 경우) */
+  savedId?: string;
+  savedAt?: string;
+  saveFailed?: boolean;
+  fromHistory?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type KbEvent = any;
+
+/** 저장된 기록 문서 → 화면 상태 (그래프·로그·답변을 그대로 다시 그린다) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fromDoc(id: string, d: Record<string, any>): Run {
+  const steps = Object.fromEntries(
+    STEP_IDS.map((k) => [
+      k,
+      { status: d.steps?.[k]?.status ?? "done", ms: d.steps?.[k]?.ms ?? undefined },
+    ]),
+  ) as Run["steps"];
+  return {
+    question: String(d.question ?? ""),
+    startedAt: Number(d.startedAt) || 0,
+    endedAt: Number(d.endedAt) || undefined,
+    connecting: false,
+    steps,
+    intent: d.intent ?? undefined,
+    keywords: d.keywords ?? undefined,
+    posts: d.posts ?? undefined,
+    chunks: d.chunks ?? undefined,
+    candidates: d.candidates ?? undefined,
+    judgments: d.judgments ?? undefined,
+    mode: d.mode,
+    sources: d.sources ?? [],
+    model: d.model ?? undefined,
+    answer: String(d.answer ?? ""),
+    done: true,
+    savedId: id,
+    savedAt: String(d.createdAt ?? ""),
+    fromHistory: true,
+  };
+}
+
+const chatsRef = (uid: string) =>
+  collection(getFirestore(getFirebaseApp()), "users", uid, "kbChats");
 
 const postHref = (id: string) => `/post?id=${encodeURIComponent(id)}`;
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -110,6 +164,11 @@ function applyEvent(r: Run, ev: KbEvent): Run {
     n.mode = ev.mode;
     n.sources = ev.sources;
     n.model = ev.model;
+  } else if (ev.type === "saved") {
+    n.savedId = ev.id;
+    n.savedAt = ev.createdAt;
+  } else if (ev.type === "saveFailed") {
+    n.saveFailed = true;
   } else if (ev.type === "error") {
     return fail(n, ev.message || "답변을 만들지 못했어요.");
   }
@@ -259,8 +318,7 @@ function TaskGraph({ run }: { run: Run }) {
   const H = Math.max(190, slots * POST_GAP + 40);
   const cy = H / 2;
   const nodeY = cy - NODE_H / 2;
-  const postY = (i: number) =>
-    cy - (slots * POST_GAP) / 2 + i * POST_GAP + (POST_GAP - POST_H) / 2;
+  const postY = (i: number) => cy - (slots * POST_GAP) / 2 + i * POST_GAP + (POST_GAP - POST_H) / 2;
   const kbY = cy - NODE_H - 6;
   const llmY = cy + 6;
 
@@ -317,9 +375,7 @@ function TaskGraph({ run }: { run: Run }) {
           return {
             key: c.id,
             label: cut(c.title, 14),
-            sub: v
-              ? `${v.relevant ? "✓ 채택" : "✗ 제외"} · 점수 ${c.score}`
-              : `점수 ${c.score}`,
+            sub: v ? `${v.relevant ? "✓ 채택" : "✗ 제외"} · 점수 ${c.score}` : `점수 ${c.score}`,
             state: v ? (v.relevant ? "ok" : "off") : "done",
             inEdge: v ? (v.relevant ? "ok" : "off") : "on",
             outEdge: v
@@ -625,10 +681,61 @@ export default function BlogAsk() {
   const [run, setRun] = useState<Run | null>(null);
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const viewRef = useRef<HTMLDivElement | null>(null);
+
+  // 유료회원 이상 전용 — 서버도 같은 기준으로 막는다(/api/kb/ask PAID_ONLY)
+  const profile = useMyProfile();
+  const group = useEffectiveGroup();
+  const allowed =
+    group === "paid" ||
+    group === "vip" ||
+    group === "admin" ||
+    profile?.email.toLowerCase() === OWNER_EMAIL;
+  const uid = profile?.uid ?? null;
+
+  // 내 질문 기록 (최근 50개)
+  const [history, setHistory] = useState<Run[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [showHistory, setShowHistory] = useState(true);
+
+  const loadHistory = useCallback(async (u: string) => {
+    try {
+      const snap = await getDocs(query(chatsRef(u), orderBy("createdAt", "desc"), limit(50)));
+      setHistory(snap.docs.map((d) => fromDoc(d.id, d.data())));
+      setHistoryError("");
+    } catch (e) {
+      console.error("[blog-ask] 질문 기록을 불러오지 못했습니다:", e);
+      setHistoryError("질문 기록을 불러오지 못했어요.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (allowed && uid) loadHistory(uid);
+  }, [allowed, uid, loadHistory]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const stop = () => abortRef.current?.abort();
+
+  const openChat = (c: Run) => {
+    if (busy) return;
+    setRun(c);
+    requestAnimationFrame(() =>
+      viewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+
+  const removeChat = async (c: Run) => {
+    if (!uid || !c.savedId || !window.confirm("이 질문 기록을 삭제할까요?")) return;
+    try {
+      await deleteDoc(doc(chatsRef(uid), c.savedId));
+      setHistory((h) => h?.filter((x) => x.savedId !== c.savedId) ?? h);
+      setRun((r) => (r?.savedId === c.savedId ? null : r));
+    } catch (e) {
+      console.error("[blog-ask] 기록 삭제 실패:", e);
+      window.alert("삭제하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    }
+  };
 
   const ask = async () => {
     const q = question.trim();
@@ -664,6 +771,7 @@ export default function BlogAsk() {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
+      let saved = false;
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -675,14 +783,23 @@ export default function BlogAsk() {
           if (!line) continue;
           try {
             const ev = JSON.parse(line);
+            if (ev.type === "saved") saved = true;
             update((r) => applyEvent(r, ev));
           } catch {}
         }
       }
-      update((r) => (r.done || r.error ? r : fail(r, "응답이 중간에 끊겼어요. 다시 시도해 주세요.")));
+      update((r) =>
+        r.done || r.error ? r : fail(r, "응답이 중간에 끊겼어요. 다시 시도해 주세요."),
+      );
+      if (saved && uid) loadHistory(uid);
     } catch {
       update((r) =>
-        fail(r, ac.signal.aborted ? "질문을 중지했어요." : "연결에 실패했어요. 잠시 후 다시 시도해 주세요.")
+        fail(
+          r,
+          ac.signal.aborted
+            ? "질문을 중지했어요."
+            : "연결에 실패했어요. 잠시 후 다시 시도해 주세요.",
+        ),
       );
     } finally {
       if (abortRef.current === ac) setBusy(false);
@@ -698,116 +815,204 @@ export default function BlogAsk() {
         듀얼 브레인 — 내 블로그 지식에 물어보기
       </p>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-        저장된 블로그 글(내 지식베이스)에서 먼저 근거를 찾고, AI가 그 글을 인용해 답해요. 어떤
-        글을 참고했는지 과정을 그래프로 보여주고, 지식베이스에 없는 내용이면 그렇다고 알려준 뒤
-        AI 일반 지식으로만 답해요.
+        저장된 블로그 글(내 지식베이스)에서 먼저 근거를 찾고, AI가 그 글을 인용해 답해요. 어떤 글을
+        참고했는지 과정을 그래프로 보여주고, 지식베이스에 없는 내용이면 그렇다고 알려준 뒤 AI 일반
+        지식으로만 답해요.
       </p>
 
-      <form
-        className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"
-        onSubmit={(e) => {
-          e.preventDefault();
-          ask();
-        }}
-      >
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          maxLength={500}
-          placeholder="예) 클로드 코드를 처음 쓸 때 알아야 할 핵심은?"
-          className="w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
-          disabled={busy}
-        />
-        {busy ? (
-          <Button type="button" variant="outline" onClick={stop} className="gap-1.5">
-            <CircleStop className="h-3.5 w-3.5" aria-hidden="true" />
-            중지
-          </Button>
-        ) : (
-          <Button type="submit" disabled={!question.trim()} className="gap-1.5">
-            <Send className="h-3.5 w-3.5" aria-hidden="true" />
-            질문하기
-          </Button>
-        )}
-      </form>
-
-      {run && (
+      {!profile ? null : !allowed ? (
+        <p className="mt-3 flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-400/5 px-3 py-2 text-xs font-semibold text-violet-500">
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          유료회원 이상 전용 기능이에요 — 유료회원으로 전환하면 질문하고, 내 질문 기록도 모아 볼 수
+          있어요.
+        </p>
+      ) : (
         <>
-          <div className="mt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                🧭 처리 과정 (Task Graph)
-              </p>
-              <p className="flex items-center gap-3 text-[11px] text-zinc-400">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-violet-500" /> 진행
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> 채택
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" /> 제외·건너뜀
-                </span>
-              </p>
-            </div>
-            <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 bg-white/50 p-2 dark:border-zinc-800 dark:bg-zinc-950/40">
-              <TaskGraph run={run} />
-            </div>
-            <p className="mt-1 text-[11px] text-zinc-400">
-              후보 글 노드에 마우스를 올리면 찾은 문장과 판정 이유가, 클릭하면 원문이 열려요.
-            </p>
-          </div>
+          <form
+            className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              ask();
+            }}
+          >
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              maxLength={500}
+              placeholder="예) 클로드 코드를 처음 쓸 때 알아야 할 핵심은?"
+              className="w-full rounded-md border border-zinc-300 bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-zinc-700"
+              disabled={busy}
+            />
+            {busy ? (
+              <Button type="button" variant="outline" onClick={stop} className="gap-1.5">
+                <CircleStop className="h-3.5 w-3.5" aria-hidden="true" />
+                중지
+              </Button>
+            ) : (
+              <Button type="submit" disabled={!question.trim()} className="gap-1.5">
+                <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                질문하기
+              </Button>
+            )}
+          </form>
 
-          <StepLog run={run} />
+          {run && (
+            <>
+              <div ref={viewRef} className="mt-4 scroll-mt-24">
+                {run.savedId && (
+                  <p className="mb-2 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                    {run.fromHistory
+                      ? `📜 저장된 기록 · ${formatKST(run.savedAt ?? "")}`
+                      : "✓ 내 질문 기록에 저장했어요 (나만 볼 수 있어요)"}
+                  </p>
+                )}
+                {run.saveFailed && (
+                  <p className="mb-2 text-[11px] text-amber-600 dark:text-amber-400">
+                    답변은 완료됐지만 기록 저장에 실패했어요.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    🧭 처리 과정 (Task Graph)
+                  </p>
+                  <p className="flex items-center gap-3 text-[11px] text-zinc-400">
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-violet-500" /> 진행
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> 채택
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />{" "}
+                      제외·건너뜀
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 bg-white/50 p-2 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <TaskGraph run={run} />
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  후보 글 노드에 마우스를 올리면 찾은 문장과 판정 이유가, 클릭하면 원문이 열려요.
+                </p>
+              </div>
 
-          {run.mode && (
-            <div
-              className={`mt-4 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                run.mode === "kb"
-                  ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-400"
-                  : "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400"
-              }`}
+              <StepLog run={run} />
+
+              {run.mode && (
+                <div
+                  className={`mt-4 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    run.mode === "kb"
+                      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-400"
+                      : "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {run.mode === "kb"
+                    ? `📚 내 지식베이스에서 관련 글 ${run.sources?.length ?? 0}개를 찾아 근거로 답했어요.`
+                    : "🔎 내 지식베이스에는 이 질문과 관련된 글이 없어요 — 아래 답변은 AI(LLM)의 일반 지식만으로 작성했어요."}
+                </div>
+              )}
+
+              {(run.answer || streaming) && (
+                <div className="mt-2 whitespace-pre-wrap rounded-lg border border-zinc-200 bg-white/70 p-3 text-sm leading-relaxed text-foreground dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <AnswerText text={run.answer} sources={run.sources ?? []} />
+                  {streaming && <span className="ml-0.5 animate-pulse text-sky-500">▍</span>}
+                </div>
+              )}
+
+              {run.mode === "kb" && !!run.sources?.length && (
+                <div className="mt-2 text-xs">
+                  <p className="font-semibold text-zinc-600 dark:text-zinc-300">참고한 글</p>
+                  <ol className="mt-1 space-y-0.5">
+                    {run.sources.map((s) => (
+                      <li key={s.id}>
+                        <span className="font-bold text-sky-600 dark:text-sky-400">[{s.n}]</span>{" "}
+                        <a
+                          href={postHref(s.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-foreground hover:underline"
+                        >
+                          {s.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {run.error && (
+                <p role="status" className="mt-2 text-xs text-red-500">
+                  {run.error}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* 내 질문 기록 — users/{uid}/kbChats, 규칙상 본인만 읽고 지운다 */}
+          <div className="mt-4 border-t border-sky-400/20 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              aria-expanded={showHistory}
+              className="flex w-full items-center gap-1.5 text-left text-xs font-bold text-zinc-700 dark:text-zinc-300"
             >
-              {run.mode === "kb"
-                ? `📚 내 지식베이스에서 관련 글 ${run.sources?.length ?? 0}개를 찾아 근거로 답했어요.`
-                : "🔎 내 지식베이스에는 이 질문과 관련된 글이 없어요 — 아래 답변은 AI(LLM)의 일반 지식만으로 작성했어요."}
-            </div>
-          )}
-
-          {(run.answer || streaming) && (
-            <div className="mt-2 whitespace-pre-wrap rounded-lg border border-zinc-200 bg-white/70 p-3 text-sm leading-relaxed text-foreground dark:border-zinc-800 dark:bg-zinc-900/60">
-              <AnswerText text={run.answer} sources={run.sources ?? []} />
-              {streaming && <span className="ml-0.5 animate-pulse text-sky-500">▍</span>}
-            </div>
-          )}
-
-          {run.mode === "kb" && !!run.sources?.length && (
-            <div className="mt-2 text-xs">
-              <p className="font-semibold text-zinc-600 dark:text-zinc-300">참고한 글</p>
-              <ol className="mt-1 space-y-0.5">
-                {run.sources.map((s) => (
-                  <li key={s.id}>
-                    <span className="font-bold text-sky-600 dark:text-sky-400">[{s.n}]</span>{" "}
-                    <a
-                      href={postHref(s.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-foreground hover:underline"
+              <History className="h-3.5 w-3.5" aria-hidden="true" />내 질문 기록
+              {history ? ` (${history.length})` : ""}
+              <span className="ml-1 font-normal text-zinc-400">🔒 나만 볼 수 있어요</span>
+              <ChevronDown
+                className={`ml-auto h-3.5 w-3.5 transition-transform ${showHistory ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {showHistory &&
+              (historyError ? (
+                <p className="mt-2 text-xs text-red-500">{historyError}</p>
+              ) : !history ? (
+                <p className="mt-2 text-xs text-zinc-400">불러오는 중…</p>
+              ) : history.length === 0 ? (
+                <p className="mt-2 text-xs text-zinc-400">
+                  아직 저장된 질문이 없어요. 질문하면 답변과 함께 여기에 쌓여요.
+                </p>
+              ) : (
+                <ul className="mt-2 max-h-72 divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 bg-white/50 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  {history.map((c) => (
+                    <li
+                      key={c.savedId}
+                      className={`flex items-center gap-2 px-3 py-2 ${
+                        run?.savedId === c.savedId ? "bg-sky-400/10" : ""
+                      }`}
                     >
-                      {s.title}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {run.error && (
-            <p role="status" className="mt-2 text-xs text-red-500">
-              {run.error}
-            </p>
-          )}
+                      <button
+                        type="button"
+                        onClick={() => openChat(c)}
+                        disabled={busy}
+                        className="min-w-0 flex-1 text-left disabled:opacity-60"
+                      >
+                        <p className="truncate text-xs font-medium text-foreground hover:underline">
+                          {c.question}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-zinc-400">
+                          {formatKST(c.savedAt ?? "")} ·{" "}
+                          {c.mode === "kb"
+                            ? `📚 지식베이스 · 출처 ${c.sources?.length ?? 0}개`
+                            : "🤖 LLM 단독"}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeChat(c)}
+                        aria-label="이 질문 기록 삭제"
+                        title="삭제"
+                        className="shrink-0 rounded p-1 text-zinc-400 transition-colors hover:text-red-500"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+          </div>
         </>
       )}
     </div>
