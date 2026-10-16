@@ -98,6 +98,19 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // tg-post-saver 맥북 ↔ Render 역할 분담 (2026-10-16)
+    //   · runtime/mac: 맥북 하트비트 — Render 가 신선하면 음성 생성·자막 추출을 맥북에 양보한다
+    //     (이 규칙이 없어 하트비트 쓰기가 늘 거부됐고, "맥북 우선" 분담이 실제로는 동작하지 않았다)
+    //   · subJobs: 유튜브 자막 대행 큐 — Render(데이터센터 IP)는 자막 다운로드가 429 로 막혀
+    //     맥북(가정용 IP)이 대신 받는다. 내용은 공개 영상 자막뿐이다
+    //   둘 다 API 키(REST)로 접근해 ttsQueue 와 같이 개방형이다
+    match /runtime/{docId} {
+      allow read, write: if true;
+    }
+    match /subJobs/{jobId} {
+      allow read, write: if true;
+    }
+
     // ★ 방문자 실시간 집계 (stats/visitors, stats/daily_{날짜})
     match /stats/{docId} {
       allow read, write: if true;

@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-10-11",
+  "lastUpdated": "2026-10-16",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -127,6 +127,11 @@
           "name": "카카오 로그인 (Netlify Function + 커스텀 토큰)",
           "purpose": "구글 옆 카카오 로그인 — /kakao 콜백이 code 를 Netlify Function(무료·상시)으로 보내 카카오 토큰·프로필 교환 후 node:crypto 로 Firebase 커스텀 토큰(uid=kakao_{id})을 RS256 서명. Render 의존 없음",
           "config": "lib/kakao.ts, app/kakao/page.tsx, netlify/functions/kakao-auth.mjs, netlify.toml"
+        },
+        {
+          "name": "tg-post-saver 맥북↔Render 분담용 Firestore 컬렉션 (runtime · subJobs)",
+          "purpose": "runtime/mac = 맥북 하트비트(Render 가 신선하면 음성 생성·유튜브 자막 추출을 맥북에 양보), subJobs = 유튜브 자막 대행 큐. API 키(REST)로 접근해 ttsQueue 처럼 개방형",
+          "config": "firestore.rules (2026-10-16 추가 — 이전엔 runtime 규칙이 없어 하트비트 쓰기가 늘 거부됐다). 배포: firebase deploy --only firestore:rules --project jini-vibe-coding"
         }
       ]
     },
