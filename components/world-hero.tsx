@@ -1,9 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import IconMarquee from "@/components/icon-marquee";
 import { SpotlightReveal } from "@/components/ui/image-reveal";
-import { CATEGORIES } from "@/lib/sites";
 import { useSiteGate } from "@/lib/membership";
 
 export default function WorldHero() {
@@ -30,9 +28,13 @@ export default function WorldHero() {
         <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
           바이브코딩으로 만든 {sites.length}개의 사이트, 한 곳에서.
         </p>
-        <Button asChild size="lg" className="mt-8">
-          <a href={`#cat-${CATEGORIES[0].id}`}>사이트 둘러보기</a>
-        </Button>
+        <p className="mt-8 text-base font-semibold leading-relaxed text-zinc-800 sm:text-lg dark:text-zinc-200">
+          세상 모든 데이터를 연결하라.
+          <br />
+          그 세계에서 나만의 커스텀 SaaS를 만들어라.
+          <br />
+          그리고, AI에게 질문하라.
+        </p>
       </div>
 
       {/* 아이콘 무한 캐러셀 2줄 — 마우스를 따라 스포트라이트가 아이콘을 또렷하게 비춘다.
