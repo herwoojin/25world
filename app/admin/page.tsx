@@ -193,7 +193,7 @@ export default function AdminPage() {
             <Link href="/#blog" className="font-semibold text-foreground underline-offset-4 hover:underline">
               블로그
             </Link>{" "}
-            — 새 글 등록, 제목 수정·삭제, VIP 지정, 네이버 블로그용 복사
+            — 새 글 등록, 제목 수정·삭제, VIP 지정 (네이버 블로그용 복사는 모든 회원에게 열림)
           </li>
           <li>
             ·{" "}

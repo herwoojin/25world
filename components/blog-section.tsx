@@ -453,7 +453,7 @@ export default function BlogSection() {
     }
   }, [posts, sort, likeCounts, catFilter, previews, favs]);
 
-  // 관리자: 네이버 블로그용 복사 창을 띄울 글 (메뉴 밖에서 띄우므로 상태를 여기서 든다)
+  // 네이버 블로그용 복사 창을 띄울 글 (메뉴 밖에서 띄우므로 상태를 여기서 든다)
   const [naverPost, setNaverPost] = useState<BlogPost | null>(null);
 
   const download = async (post: BlogPost) => {
@@ -782,6 +782,21 @@ export default function BlogSection() {
                   다운로드
                 </Button>
 
+                {/* 네이버 블로그용 복사 — 모든 회원. 단 잠긴 유료 전용 글은 본문을 복사해 갈 수 없게 숨긴다 */}
+                {!locked && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setNaverPost(post)}
+                    aria-label={`${post.title} 네이버 블로그용 복사`}
+                    className="min-h-[44px] justify-start gap-2 text-[#03C75A]"
+                  >
+                    <span aria-hidden="true" className="rounded bg-[#03C75A] px-1 text-[10px] font-extrabold text-white">
+                      N
+                    </span>
+                    네이버 블로그용 복사
+                  </Button>
+                )}
+
                 {adminKey && (
                   <>
                     <select
@@ -821,17 +836,6 @@ export default function BlogSection() {
                     >
                       <Pencil className="h-4 w-4" aria-hidden="true" />
                       제목 수정
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setNaverPost(post)}
-                      aria-label={`${post.title} 네이버 블로그용 복사`}
-                      className="min-h-[44px] justify-start gap-2 text-[#03C75A]"
-                    >
-                      <span aria-hidden="true" className="rounded bg-[#03C75A] px-1 text-[10px] font-extrabold text-white">
-                        N
-                      </span>
-                      네이버 블로그용 복사
                     </Button>
                     <Button
                       variant="outline"
