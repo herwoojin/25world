@@ -1,8 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import IconMarquee from "@/components/icon-marquee";
 import { SpotlightReveal } from "@/components/ui/image-reveal";
 import { useSiteGate } from "@/lib/membership";
+
+// 주인장 전용 — 일반 방문자는 코드도 받지 않도록 지연 로딩
+const ResearchPanel = dynamic(() => import("@/components/research-panel"), { ssr: false });
 
 export default function WorldHero() {
   const { sites, locked, paidOnly } = useSiteGate();
@@ -35,6 +39,7 @@ export default function WorldHero() {
           <br />
           그리고, AI에게 질문하라.
         </p>
+        <ResearchPanel />
       </div>
 
       {/* 아이콘 무한 캐러셀 2줄 — 마우스를 따라 스포트라이트가 아이콘을 또렷하게 비춘다.

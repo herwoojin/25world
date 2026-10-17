@@ -1,6 +1,6 @@
 # TECH_STACK — 25world
 
-> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-10-16**
+> 바이브코딩 20개 사이트 포털. Next.js 14 정적 내보내기 → Netlify 호스팅. **마지막 업데이트: 2026-10-17**
 
 ## 아키텍처
 
@@ -39,6 +39,7 @@ out/  ──────────────►  Netlify 정적 호스팅
 | 회원 등급 | — | 일반/유료/VIP/관리자 — 유료 사이트·자료실 열람 게이팅 | `lib/membership.ts`, `firestore.rules` | Firestore `users/{uid}.group`. 규칙(2026-09-16): 본인 문서만 읽기, 목록·등급 변경·삭제는 관리자(주인장 구글 계정 또는 group=admin)만, 본인은 group·role·유튜브 무료횟수 변경 불가. 배포: `firebase deploy --only firestore:rules --project jini-vibe-coding` |
 | 유튜브→블로그 무료 이용 한도 | — | 일반회원 최초 5회 + 이후 7일 1회 무료, 유료회원 무제한 | `components/youtube-request.tsx` | 실제 횟수 관리는 tg-post-saver 서버(`yt-quota.js`)가 Firebase ID 토큰으로 본인 확인 후 처리 — 프론트는 안내문만 표시 |
 | 듀얼 브레인 (블로그 지식베이스 Q&A) | — | 블로그 글을 지식베이스로 질문·답변 + 처리 과정을 task graph 로 표시 | `components/blog-ask.tsx`, `app/globals.css`(`.kb-flow`) | 백엔드 = tg-post-saver `kb.js`(`POST /api/kb/ask`, NDJSON 스트림). 후보 글 노드 hover=찾은 문장·판정 이유, 클릭=원문. 답변의 `[n]` 은 원문 링크. 관련 글 없으면 "지식베이스에 없음" 배너 + LLM 일반 지식 답변. **유료회원 이상 전용**(일반회원은 잠금 안내, 서버도 `PAID_ONLY` 로 거절). **내 질문 기록** = `users/{uid}/kbChats`(서버만 저장, 규칙상 본인만 읽기·삭제, 관리자도 못 봄) — 목록에서 누르면 그래프·답변 재표시. **참고한 글 → NotebookLM**: 글 전체 텍스트 한 번에 복사(질문 머리말 + `[n]` 제목·출처·본문) / URL(`/r/{id}`) 복사 / NotebookLM 열기 + 3단계 안내. 본문은 패널이 뜰 때 미리 받아 두어 클릭 즉시 복사(브라우저 클립보드 제약 대응). 복사 도우미 `components/notebooklm/nlm-copy.ts` 는 하단 트레이와 공용. `next/dynamic` 지연 로딩이라 홈 First Load JS 변화 없음(308 kB) |
+| 헤르메스 연구소 (연구하기) | — | 내가 만든 사이트들을 근거로 헤르메스 에이전트가 연구·보고서 작성, 에이전트 작업대 연출이 실제 진행에 맞춰 움직임 | `components/research-panel.tsx`, `components/world-hero.tsx`, `app/globals.css` | 주인장(또는 group=admin)만 보임. Firestore `researchJobs`(등록·본인 읽기·삭제만 클라이언트, 진행 기록은 맥북 워커가 firebase-admin 으로). 실행은 맥북의 tg-post-saver `research/worker.js` → `hermes -z … -t file`(파일 읽기만). 맥북이 꺼져 있으면 대기했다가 켜지면 시작. NotebookLM·슬라이드 단계는 준비 중 |
 | 자료실 | — | 목록 전체 공개, VIP 파일 다운로드는 유료 이상(한시적 무료 기간엔 모두), 업로드·삭제·VIP·기간 지정은 관리자 | `components/library-section.tsx`, `lib/library.ts` | 백엔드 = `scripts/library-webapp.gs`. VIP 는 zip 확장자 기본 + 관리자 파일별 오버라이드(`VIP_FILES`), 무료 기간(`FREE_WINDOWS`, 한국시간·종료일 포함). **다운로드는 tg-post-saver 가 대행** — `/api/library/ticket` → Apps Script `authorize`(판정) → 서버가 드라이브에서 스트리밍. 이메일 없는 카카오 회원·구글 미로그인 브라우저도 가능 |
 | 사이트별 부가 자료 (GIT코드·프롬프트·메모) | — | 사이트 상세 팝업에 GIT코드/프롬프트 버튼 — 열람 유료회원 이상, 업로드·메모는 관리자만 | `lib/site-resources.ts`, `components/category-orbital.tsx` | Firestore `siteResources/{siteId}`(gitUrl, promptMd, promptFileName, coreNote). 프롬프트는 .md 업로드 → 팝업에서 복사 버튼 |
 | 에이전트 협업 연출 **(연동테스트중)** | — | 카테고리 궤도 중앙 허브 클릭 → 각 사이트로 입자가 튀는 애니메이션 | `components/category-orbital.tsx`, `app/globals.css`(`agent-particle-travel`) | **실제 자동화 없음** — 순수 CSS 시각 연출. 4.2초간 재생 후 "완료!" 표시, 재생 중 궤도 회전은 정지 |

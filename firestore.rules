@@ -111,6 +111,25 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // 연구하기 (헤르메스 에이전트) — 2026-10-17
+    //   · 등록: 주인장 구글 계정 또는 group=admin 만, 본인 uid·queued 상태로
+    //   · 읽기·삭제: 본인 작업만 (질문·보고서는 비공개)
+    //   · 진행 기록·보고서는 맥북 워커(firebase-admin)만 쓴다 — 클라이언트 수정 금지
+    match /researchJobs/{jobId} {
+      function isAdminUser() {
+        return request.auth != null && (
+          (request.auth.token.email == 'herhero78@gmail.com'
+            && request.auth.token.email_verified == true)
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('group', '') == 'admin')
+        );
+      }
+      allow create: if isAdminUser()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'queued';
+      allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     // ★ 방문자 실시간 집계 (stats/visitors, stats/daily_{날짜})
     match /stats/{docId} {
       allow read, write: if true;

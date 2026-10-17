@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-10-16",
+  "lastUpdated": "2026-10-17",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -132,6 +132,11 @@
           "name": "tg-post-saver 맥북↔Render 분담용 Firestore 컬렉션 (runtime · subJobs)",
           "purpose": "runtime/mac = 맥북 하트비트(Render 가 신선하면 음성 생성·유튜브 자막 추출을 맥북에 양보), subJobs = 유튜브 자막 대행 큐. API 키(REST)로 접근해 ttsQueue 처럼 개방형",
           "config": "firestore.rules (2026-10-16 추가 — 이전엔 runtime 규칙이 없어 하트비트 쓰기가 늘 거부됐다). 배포: firebase deploy --only firestore:rules --project jini-vibe-coding"
+        },
+        {
+          "name": "헤르메스 연구소 (연구하기)",
+          "purpose": "히어로 아래 질문칸 — 내가 만든 사이트들의 코드·문서를 근거로 헤르메스 에이전트가 연구해 보고서를 쓴다. 에이전트 작업대(카드 준비 → 사서 → 연구원 → 노트북 → 디자이너)가 실제 진행 상태에 맞춰 움직이고, 고른 사이트·보고서·내 연구 기록을 보여준다. 주인장(또는 group=admin)만 보인다",
+          "config": "components/research-panel.tsx (next/dynamic 지연 로딩), components/world-hero.tsx, app/globals.css(.agent-working/.agent-beam/.agent-pop). Firestore researchJobs — 클라이언트는 등록·본인 읽기·삭제만, 진행 기록은 맥북 워커(tg-post-saver research/worker.js)가 firebase-admin 으로 쓴다. 맥북 하트비트 runtime/mac 로 연결 상태 표시"
         }
       ]
     },

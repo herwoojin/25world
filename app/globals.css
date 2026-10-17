@@ -254,3 +254,33 @@
     animation: none;
   }
 }
+
+/* 헤르메스 연구소 — 에이전트 작업대 (실제 진행 상태에 따라 움직인다) */
+@keyframes agent-working {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-4deg); }
+  75% { transform: translateY(-3px) rotate(4deg); }
+}
+.agent-working {
+  animation: agent-working 0.9s ease-in-out infinite;
+}
+@keyframes agent-beam {
+  from { background-position: 0% 0; }
+  to { background-position: 200% 0; }
+}
+.agent-beam {
+  background: linear-gradient(90deg, transparent, #a78bfa, #22d3ee, transparent);
+  background-size: 200% 100%;
+  animation: agent-beam 1s linear infinite;
+}
+@keyframes agent-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.agent-pop {
+  animation: agent-pop 0.35s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-working, .agent-beam, .agent-pop { animation: none; }
+  .agent-beam { background: #a78bfa; }
+}
