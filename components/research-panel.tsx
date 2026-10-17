@@ -4,6 +4,7 @@
 // 질문을 Firestore researchJobs 에 넣으면 맥북의 헤르메스 에이전트(tg-post-saver research/worker.js)가
 // 사이트들의 특성 카드를 근거로 연구해 같은 문서에 결과를 쓴다. 화면은 문서를 실시간 구독해
 // 에이전트들이 차례로 일하는 모습을 그린다 — 연출이 아니라 실제 진행 상태다.
+// 연구가 끝나면 NotebookLM 노트북·슬라이드까지 만들어 이 안에서 슬라이드쇼로 보여준다.
 // 주인장(또는 관리자 등급)에게만 보인다. Firestore 규칙도 같은 기준으로 막는다.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -11,6 +12,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   getFirestore,
   limit,
@@ -37,6 +39,10 @@ interface Job {
   selected?: { id: string; name: string; cat: string; reason: string }[];
   report?: string;
   error?: string;
+  notebookUrl?: string;
+  /** 슬라이드 PDF — Firestore researchFiles 에 조각으로 저장 (이 프로젝트엔 Storage 가 없다) */
+  slidesPdf?: { fileId: string; parts: number; bytes: number };
+  nlmError?: string;
   createdAt?: string;
   startedAt?: string;
   endedAt?: string;
@@ -46,17 +52,37 @@ const AGENTS = [
   { id: "catalog", emoji: "🗂️", name: "카드 준비", role: "사이트 특성 카드" },
   { id: "select", emoji: "🔍", name: "사서", role: "관련 사이트 고르기" },
   { id: "research", emoji: "🔬", name: "연구원", role: "헤르메스 보고서" },
-  { id: "notebook", emoji: "📓", name: "노트북", role: "NotebookLM 전송", soon: true },
-  { id: "slides", emoji: "🎞️", name: "디자이너", role: "슬라이드 생성", soon: true },
+  { id: "notebook", emoji: "📓", name: "노트북", role: "NotebookLM 전송" },
+  { id: "slides", emoji: "🎞️", name: "디자이너", role: "슬라이드 생성" },
 ] as const;
 
 const MAC_FRESH_MS = 90_000;
+
+/** researchFiles 조각들을 이어 붙여 PDF Blob 주소로 */
+async function loadPdfUrl(f: NonNullable<Job["slidesPdf"]>): Promise<string> {
+  const parts = await Promise.all(
+    Array.from({ length: f.parts }, (_, n) => getDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)))
+  );
+  const chunks = parts.map((p) => {
+    const data = p.get("data");
+    if (!data) throw new Error("슬라이드 조각이 빠졌어요.");
+    // 원본 바이트를 그대로 담아야 PDF 가 깨지지 않는다 (공유 버퍼 대신 새 배열)
+    return new Uint8Array(data.toUint8Array());
+  });
+  return URL.createObjectURL(new Blob(chunks, { type: "application/pdf" }));
+}
+
+async function deleteFile(f: NonNullable<Job["slidesPdf"]>) {
+  await Promise.all(
+    Array.from({ length: f.parts }, (_, n) => deleteDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)))
+  );
+  await deleteDoc(doc(db(), "researchFiles", f.fileId));
+}
 const db = () => getFirestore(getFirebaseApp());
 const catEmoji = (cat: string) => CATEGORIES.find((c) => c.id === cat)?.emoji ?? "🌐";
 const secs = (ms?: number) => (ms != null ? `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}초` : "");
 
-function agentState(job: Job | null, id: string, soon?: boolean): StepStatus | "soon" {
-  if (soon) return "soon";
+function agentState(job: Job | null, id: string): StepStatus {
   return job?.steps?.[id]?.status ?? "pending";
 }
 
@@ -140,7 +166,7 @@ function AgentStation({
   emoji: string;
   name: string;
   role: string;
-  state: StepStatus | "soon";
+  state: StepStatus;
   note?: string;
 }) {
   const ring =
@@ -152,7 +178,7 @@ function AgentStation({
           ? "ring-2 ring-red-400"
           : "ring-1 ring-zinc-300 dark:ring-zinc-700";
   return (
-    <div className={`flex w-20 shrink-0 flex-col items-center text-center ${state === "soon" ? "opacity-40" : ""}`}>
+    <div className="flex w-20 shrink-0 flex-col items-center text-center">
       <div
         className={`relative flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl transition-all dark:bg-zinc-900 ${ring} ${
           state === "running" ? "agent-working" : state === "pending" ? "grayscale" : ""
@@ -167,9 +193,9 @@ function AgentStation({
       </div>
       <p className="mt-1.5 text-xs font-bold text-foreground">{name}</p>
       <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-400">
-        {state === "soon" ? "준비 중" : state === "running" ? "작업 중…" : state === "error" ? "실패" : role}
+        {state === "running" ? "작업 중…" : state === "error" ? "실패" : role}
       </p>
-      {note && state !== "soon" && (
+      {note && (
         <p className="mt-0.5 text-[10px] leading-tight text-violet-600 dark:text-violet-300">{note}</p>
       )}
     </div>
@@ -198,6 +224,8 @@ export default function ResearchPanel() {
   const [now, setNow] = useState(() => Date.now());
   const [history, setHistory] = useState<Job[] | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfErr, setPdfErr] = useState("");
 
   const siteUrl = useMemo(() => new Map(sites.map((s) => [s.id, s.url])), [sites]);
   const busy = job?.status === "queued" || job?.status === "running";
@@ -228,6 +256,29 @@ export default function ResearchPanel() {
       () => {}
     );
   }, [jobId]);
+
+  // 슬라이드가 완성되면 조각을 받아 바로 슬라이드쇼로 연다
+  const pdfKey = job?.slidesPdf?.fileId;
+  useEffect(() => {
+    if (!job?.slidesPdf) {
+      setPdfUrl(null);
+      return;
+    }
+    let url: string | null = null;
+    let alive = true;
+    setPdfErr("");
+    loadPdfUrl(job.slidesPdf)
+      .then((u) => {
+        url = u;
+        if (alive) setPdfUrl(u);
+        else URL.revokeObjectURL(u);
+      })
+      .catch((e) => alive && setPdfErr(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [pdfKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadHistory = useCallback(async () => {
     if (!profile?.uid) return;
@@ -276,6 +327,7 @@ export default function ResearchPanel() {
 
   const remove = async (j: Job) => {
     if (!window.confirm("이 연구 기록을 삭제할까요?")) return;
+    if (j.slidesPdf) await deleteFile(j.slidesPdf).catch(() => {});
     await deleteDoc(doc(db(), "researchJobs", j.id)).catch(() => {});
     if (jobId === j.id) {
       setJobId(null);
@@ -343,12 +395,10 @@ export default function ResearchPanel() {
           <div className="mt-3 overflow-x-auto pb-1">
             <div className="flex min-w-[520px] items-start gap-1">
               {AGENTS.map((a, i) => {
-                const soon = "soon" in a && a.soon;
-                const st = agentState(job, a.id, soon);
+                const st = agentState(job, a.id);
                 const step = job.steps?.[a.id];
                 const next = AGENTS[i + 1];
-                const nextSoon = next && "soon" in next && next.soon;
-                const nextSt = next ? agentState(job, next.id, nextSoon) : null;
+                const nextSt = next ? agentState(job, next.id) : null;
                 return (
                   <div key={a.id} className="flex flex-1 items-start">
                     <AgentStation
@@ -393,6 +443,57 @@ export default function ResearchPanel() {
               연구하지 못했어요: {job.error}
             </p>
           )}
+          {/* 🎞️ 슬라이드쇼 — 완성되면 바로 여기서 재생 */}
+          {job.slidesPdf && (
+            <div className="agent-pop mt-4 overflow-hidden rounded-xl border border-violet-400/40 bg-zinc-900">
+              {pdfUrl ? (
+                <iframe src={`${pdfUrl}#view=FitH`} title="연구 결과 슬라이드" className="aspect-video w-full bg-white" />
+              ) : (
+                <p className="flex aspect-video items-center justify-center text-xs text-zinc-300">
+                  {pdfErr || `슬라이드를 불러오는 중… (${(job.slidesPdf.bytes / 1048576).toFixed(1)}MB)`}
+                </p>
+              )}
+            </div>
+          )}
+          {(job.notebookUrl || pdfUrl) && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {pdfUrl && (
+                <>
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700"
+                  >
+                    🎞️ 슬라이드 크게 보기
+                  </a>
+                  <a
+                    href={pdfUrl}
+                    download={`연구-슬라이드-${(job.createdAt || "").slice(0, 10)}.pdf`}
+                    className="rounded-lg bg-zinc-700 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-600"
+                  >
+                    PDF 받기
+                  </a>
+                </>
+              )}
+              {job.notebookUrl && (
+                <a
+                  href={job.notebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  📓 NotebookLM에서 열기 (PPTX 내보내기)
+                </a>
+              )}
+            </div>
+          )}
+          {job.nlmError && (
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              보고서는 완성됐지만 NotebookLM 단계에서 멈췄어요: {job.nlmError}
+            </p>
+          )}
+
           {job.report && (
             <div className="mt-4 rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
               <Report text={job.report} siteUrl={siteUrl} />
@@ -434,7 +535,7 @@ export default function ResearchPanel() {
                   <p className="mt-0.5 text-[11px] text-zinc-400">
                     {h.createdAt ? formatKST(h.createdAt) : ""} ·{" "}
                     {h.status === "done"
-                      ? `사이트 ${h.selected?.length ?? 0}개 근거`
+                      ? `사이트 ${h.selected?.length ?? 0}개 근거${h.slidesPdf ? " · 🎞️ 슬라이드" : ""}`
                       : h.status === "error"
                         ? "실패"
                         : "진행 중"}

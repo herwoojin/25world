@@ -136,7 +136,7 @@
         {
           "name": "헤르메스 연구소 (연구하기)",
           "purpose": "히어로 아래 질문칸 — 내가 만든 사이트들의 코드·문서를 근거로 헤르메스 에이전트가 연구해 보고서를 쓴다. 에이전트 작업대(카드 준비 → 사서 → 연구원 → 노트북 → 디자이너)가 실제 진행 상태에 맞춰 움직이고, 고른 사이트·보고서·내 연구 기록을 보여준다. 주인장(또는 group=admin)만 보인다",
-          "config": "components/research-panel.tsx (next/dynamic 지연 로딩), components/world-hero.tsx, app/globals.css(.agent-working/.agent-beam/.agent-pop). Firestore researchJobs — 클라이언트는 등록·본인 읽기·삭제만, 진행 기록은 맥북 워커(tg-post-saver research/worker.js)가 firebase-admin 으로 쓴다. 맥북 하트비트 runtime/mac 로 연결 상태 표시"
+          "config": "components/research-panel.tsx (next/dynamic 지연 로딩), components/world-hero.tsx, app/globals.css(.agent-working/.agent-beam/.agent-pop). Firestore researchJobs — 클라이언트는 등록·본인 읽기·삭제만, 진행 기록은 맥북 워커(tg-post-saver research/worker.js)가 firebase-admin 으로 쓴다. 맥북 하트비트 runtime/mac 로 연결 상태 표시 3단계(2026-10-17): 연구가 끝나면 NotebookLM 노트북(보고서·근거 사이트 카드)과 한국어 슬라이드를 맥북이 자동 생성 → 슬라이드 PDF 는 Firestore researchFiles 에 700KB 조각(본인만 읽기)으로 저장, 웹이 이어 붙여 iframe 슬라이드쇼로 재생 + PDF 받기 + NotebookLM 열기(PPTX 는 거기서). Firebase Storage 미사용(버킷 없음)."
         }
       ]
     },

@@ -130,6 +130,11 @@ service cloud.firestore {
       allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
+    // 연구 슬라이드 PDF 조각 (researchFiles/{jobId}_pdf + __p0..N) — 본인만 읽기·삭제, 쓰기는 맥북 워커만
+    match /researchFiles/{fileId} {
+      allow read, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     // ★ 방문자 실시간 집계 (stats/visitors, stats/daily_{날짜})
     match /stats/{docId} {
       allow read, write: if true;
