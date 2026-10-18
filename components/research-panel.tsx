@@ -5,6 +5,8 @@
 // 사이트들의 특성 카드를 근거로 연구해 같은 문서에 결과를 쓴다. 화면은 문서를 실시간 구독해
 // 에이전트들이 차례로 일하는 모습을 그린다 — 연출이 아니라 실제 진행 상태다.
 // 연구가 끝나면 NotebookLM 노트북·슬라이드까지 만들어 이 안에서 슬라이드쇼로 보여준다.
+// ⚡ Jev(TypeSafe 결정 모델)가 사이트 전체를 2초 안에 먼저 점수 매기고(정찰), 사서(헤르메스)가 그 순서로
+// 최종 선택한다 — 순위 막대에 사서가 고른 사이트를 ✓ 로 겹쳐 보여 두 판단을 비교할 수 있다.
 // 주인장(또는 관리자 등급)에게만 보인다. Firestore 규칙도 같은 기준으로 막는다.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -43,6 +45,14 @@ interface Job {
   /** 슬라이드 PDF — Firestore researchFiles 에 조각으로 저장 (이 프로젝트엔 Storage 가 없다) */
   slidesPdf?: { fileId: string; parts: number; bytes: number };
   nlmError?: string;
+  /** ⚡ Jev 1차 순위 (사이트별 관련도 0~1) */
+  jev?: {
+    ranking: { id: string; name: string; cat: string; p: number }[];
+    tokens: number;
+    costUsd: number;
+    ms: number;
+    requests: number;
+  };
   createdAt?: string;
   startedAt?: string;
   endedAt?: string;
@@ -50,6 +60,7 @@ interface Job {
 
 const AGENTS = [
   { id: "catalog", emoji: "🗂️", name: "카드 준비", role: "사이트 특성 카드" },
+  { id: "scout", emoji: "⚡", name: "Jev 검증", role: "사이트 빠른 판정" },
   { id: "select", emoji: "🔍", name: "사서", role: "관련 사이트 고르기" },
   { id: "research", emoji: "🔬", name: "연구원", role: "헤르메스 보고서" },
   { id: "notebook", emoji: "📓", name: "노트북", role: "NotebookLM 전송" },
@@ -61,7 +72,9 @@ const MAC_FRESH_MS = 90_000;
 /** researchFiles 조각들을 이어 붙여 PDF Blob 주소로 */
 async function loadPdfUrl(f: NonNullable<Job["slidesPdf"]>): Promise<string> {
   const parts = await Promise.all(
-    Array.from({ length: f.parts }, (_, n) => getDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)))
+    Array.from({ length: f.parts }, (_, n) =>
+      getDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)),
+    ),
   );
   const chunks = parts.map((p) => {
     const data = p.get("data");
@@ -74,7 +87,9 @@ async function loadPdfUrl(f: NonNullable<Job["slidesPdf"]>): Promise<string> {
 
 async function deleteFile(f: NonNullable<Job["slidesPdf"]>) {
   await Promise.all(
-    Array.from({ length: f.parts }, (_, n) => deleteDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)))
+    Array.from({ length: f.parts }, (_, n) =>
+      deleteDoc(doc(db(), "researchFiles", `${f.fileId}__p${n}`)),
+    ),
   );
   await deleteDoc(doc(db(), "researchFiles", f.fileId));
 }
@@ -124,7 +139,7 @@ function Report({ text, siteUrl }: { text: string; siteUrl: Map<string, string> 
             <Inline text={li} siteUrl={siteUrl} />
           </li>
         ))}
-      </ul>
+      </ul>,
     );
     list = [];
   };
@@ -141,13 +156,13 @@ function Report({ text, siteUrl }: { text: string; siteUrl: Map<string, string> 
       blocks.push(
         <h3 key={blocks.length} className="mt-4 text-sm font-bold text-foreground first:mt-0">
           {h[1]}
-        </h3>
+        </h3>,
       );
     } else if (line) {
       blocks.push(
         <p key={blocks.length} className="my-1.5">
           <Inline text={line} siteUrl={siteUrl} />
-        </p>
+        </p>,
       );
     }
   }
@@ -196,7 +211,9 @@ function AgentStation({
         {state === "running" ? "작업 중…" : state === "error" ? "실패" : role}
       </p>
       {note && (
-        <p className="mt-0.5 text-[10px] leading-tight text-violet-600 dark:text-violet-300">{note}</p>
+        <p className="mt-0.5 text-[10px] leading-tight text-violet-600 dark:text-violet-300">
+          {note}
+        </p>
       )}
     </div>
   );
@@ -237,7 +254,7 @@ export default function ResearchPanel() {
     return onSnapshot(
       doc(db(), "runtime", "mac"),
       (s) => setMacAt(new Date(String(s.get("at") || 0)).getTime() || 0),
-      () => {}
+      () => {},
     );
   }, [isAdmin]);
 
@@ -253,7 +270,7 @@ export default function ResearchPanel() {
     return onSnapshot(
       doc(db(), "researchJobs", jobId),
       (s) => s.exists() && setJob({ id: s.id, ...(s.data() as Omit<Job, "id">) }),
-      () => {}
+      () => {},
     );
   }, [jobId]);
 
@@ -284,12 +301,12 @@ export default function ResearchPanel() {
     if (!profile?.uid) return;
     try {
       const snap = await getDocs(
-        query(collection(db(), "researchJobs"), where("uid", "==", profile.uid), limit(50))
+        query(collection(db(), "researchJobs"), where("uid", "==", profile.uid), limit(50)),
       );
       setHistory(
         snap.docs
           .map((d) => ({ id: d.id, ...(d.data() as Omit<Job, "id">) }))
-          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
       );
     } catch {
       setHistory([]);
@@ -345,7 +362,9 @@ export default function ResearchPanel() {
         <p className="flex items-center gap-2 text-sm font-bold text-violet-600 dark:text-violet-300">
           <FlaskConical className="h-4 w-4" aria-hidden="true" />
           헤르메스 연구소
-          <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-[10px] font-semibold">주인장 전용</span>
+          <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-[10px] font-semibold">
+            주인장 전용
+          </span>
         </p>
         <span className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
           <span className={`h-2 w-2 rounded-full ${macAlive ? "bg-emerald-500" : "bg-zinc-400"}`} />
@@ -353,7 +372,8 @@ export default function ResearchPanel() {
         </span>
       </div>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-        내가 만든 사이트 {sites.length}개의 코드·문서를 근거로 헤르메스 에이전트가 연구해 보고서를 써요.
+        내가 만든 사이트 {sites.length}개의 코드·문서를 근거로 헤르메스 에이전트가 연구해 보고서를
+        써요.
       </p>
 
       <form
@@ -384,16 +404,19 @@ export default function ResearchPanel() {
           <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
             <span className="truncate font-semibold text-foreground">Q. {job.question}</span>
             <span className="shrink-0 pl-2">
-              {job.status === "queued" && (macAlive ? "맥북이 작업을 받는 중…" : "맥북을 기다리는 중")}
+              {job.status === "queued" &&
+                (macAlive ? "맥북이 작업을 받는 중…" : "맥북을 기다리는 중")}
               {elapsed != null && job.status === "running" && `${elapsed}초 경과`}
-              {job.status === "done" && job.endedAt && job.startedAt &&
+              {job.status === "done" &&
+                job.endedAt &&
+                job.startedAt &&
                 `완료 · ${secs(new Date(job.endedAt).getTime() - new Date(job.startedAt).getTime())}`}
             </span>
           </div>
 
           {/* 에이전트 작업대 — 실제 진행 상태 그대로 */}
           <div className="mt-3 overflow-x-auto pb-1">
-            <div className="flex min-w-[520px] items-start gap-1">
+            <div className="flex min-w-[600px] items-start gap-1">
               {AGENTS.map((a, i) => {
                 const st = agentState(job, a.id);
                 const step = job.steps?.[a.id];
@@ -408,16 +431,67 @@ export default function ResearchPanel() {
                       state={st}
                       note={step?.status === "done" ? step.note || secs(step.ms) : undefined}
                     />
-                    {next && <Beam on={st === "done" && nextSt !== "pending"} flowing={nextSt === "running"} />}
+                    {next && (
+                      <Beam
+                        on={st === "done" && nextSt !== "pending"}
+                        flowing={nextSt === "running"}
+                      />
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
 
+          {/* ⚡ Jev 1차 순위 — 사서가 최종으로 고른 사이트는 ✓ */}
+          {job.jev && (
+            <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
+              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                ⚡ Jev 1차 순위 — 사이트 {job.jev.requests}개를 {(job.jev.ms / 1000).toFixed(1)}초에
+                판정 · 입력 {job.jev.tokens.toLocaleString()} 토큰 · ${job.jev.costUsd}
+                {!!job.selected?.length &&
+                  ` · 사서가 고른 ${job.selected.length}개 중 ${
+                    job.selected.filter((s) =>
+                      job.jev!.ranking.slice(0, 10).some((r) => r.id === s.id),
+                    ).length
+                  }개가 Jev 상위 10`}
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {job.jev.ranking.slice(0, 10).map((r) => {
+                  const chosen = job.selected?.some((s) => s.id === r.id);
+                  return (
+                    <li key={r.id} className="flex items-center gap-2">
+                      <span className="w-36 shrink-0 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
+                        {catEmoji(r.cat)} {r.name}
+                      </span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                        <span
+                          className={`block h-full rounded-full ${chosen ? "bg-violet-500" : "bg-amber-400"}`}
+                          style={{ width: `${Math.round(r.p * 100)}%` }}
+                        />
+                      </span>
+                      <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-zinc-500">
+                        {r.p.toFixed(2)}
+                      </span>
+                      <span className="w-4 shrink-0 text-[11px] text-violet-600 dark:text-violet-300">
+                        {chosen ? "✓" : ""}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-1 text-[10px] text-zinc-400">
+                <span className="text-amber-500">■</span> Jev 점수 ·{" "}
+                <span className="text-violet-500">■ ✓</span> 사서(헤르메스)가 최종 선택 — Jev 는
+                순서만 정하고 사이트를 빼지 않아요
+              </p>
+            </div>
+          )}
+
           {job.intent && (
             <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
-              🔍 사서가 본 질문의 의도: <span className="font-medium text-foreground">{job.intent}</span>
+              🔍 사서가 본 질문의 의도:{" "}
+              <span className="font-medium text-foreground">{job.intent}</span>
             </p>
           )}
           {!!job.selected?.length && (
@@ -447,10 +521,15 @@ export default function ResearchPanel() {
           {job.slidesPdf && (
             <div className="agent-pop mt-4 overflow-hidden rounded-xl border border-violet-400/40 bg-zinc-900">
               {pdfUrl ? (
-                <iframe src={`${pdfUrl}#view=FitH`} title="연구 결과 슬라이드" className="aspect-video w-full bg-white" />
+                <iframe
+                  src={`${pdfUrl}#view=FitH`}
+                  title="연구 결과 슬라이드"
+                  className="aspect-video w-full bg-white"
+                />
               ) : (
                 <p className="flex aspect-video items-center justify-center text-xs text-zinc-300">
-                  {pdfErr || `슬라이드를 불러오는 중… (${(job.slidesPdf.bytes / 1048576).toFixed(1)}MB)`}
+                  {pdfErr ||
+                    `슬라이드를 불러오는 중… (${(job.slidesPdf.bytes / 1048576).toFixed(1)}MB)`}
                 </p>
               )}
             </div>
@@ -510,8 +589,8 @@ export default function ResearchPanel() {
           aria-expanded={showHistory}
           className="flex w-full items-center gap-1.5 text-left text-xs font-bold text-zinc-700 dark:text-zinc-300"
         >
-          <History className="h-3.5 w-3.5" aria-hidden="true" />
-          내 연구 기록{history ? ` (${history.length})` : ""}
+          <History className="h-3.5 w-3.5" aria-hidden="true" />내 연구 기록
+          {history ? ` (${history.length})` : ""}
           <ChevronDown
             className={`ml-auto h-3.5 w-3.5 transition-transform ${showHistory ? "rotate-180" : ""}`}
             aria-hidden="true"
@@ -519,9 +598,14 @@ export default function ResearchPanel() {
         </button>
         {showHistory && (
           <ul className="mt-2 max-h-64 divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-            {!history?.length && <li className="px-3 py-2 text-xs text-zinc-400">아직 연구 기록이 없어요.</li>}
+            {!history?.length && (
+              <li className="px-3 py-2 text-xs text-zinc-400">아직 연구 기록이 없어요.</li>
+            )}
             {history?.map((h) => (
-              <li key={h.id} className={`flex items-center gap-2 px-3 py-2 ${jobId === h.id ? "bg-violet-400/10" : ""}`}>
+              <li
+                key={h.id}
+                className={`flex items-center gap-2 px-3 py-2 ${jobId === h.id ? "bg-violet-400/10" : ""}`}
+              >
                 <button
                   type="button"
                   disabled={busy}
@@ -531,7 +615,9 @@ export default function ResearchPanel() {
                   }}
                   className="min-w-0 flex-1 text-left disabled:opacity-60"
                 >
-                  <p className="truncate text-xs font-medium text-foreground hover:underline">{h.question}</p>
+                  <p className="truncate text-xs font-medium text-foreground hover:underline">
+                    {h.question}
+                  </p>
                   <p className="mt-0.5 text-[11px] text-zinc-400">
                     {h.createdAt ? formatKST(h.createdAt) : ""} ·{" "}
                     {h.status === "done"

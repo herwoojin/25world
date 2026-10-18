@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-10-17",
+  "lastUpdated": "2026-10-18",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -106,7 +106,7 @@
         {
           "name": "듀얼 브레인 (블로그 지식베이스 Q&A + Task Graph)",
           "purpose": "블로그 섹션에서 질문 → 저장된 블로그 글을 근거로 AI 답변. 질문 분석·검색·후보 글·관련성 판정·답변 분기(지식베이스/LLM 단독)를 SVG task graph 로 실시간 표시하고, 답변의 [n] 출처를 원문 글로 연결. 관련 글이 없으면 '지식베이스에 없음' 안내 후 LLM 일반 지식으로만 답변",
-          "config": "components/blog-ask.tsx (next/dynamic 지연 로딩), app/globals.css(.kb-flow). 백엔드 tg-post-saver kb.js · POST /api/kb/ask (NDJSON 스트림, Firebase ID 토큰 필수). 유료회원 이상 전용(일반회원은 잠금 안내). 내 질문 기록 = Firestore users/{uid}/kbChats(서버만 저장, 규칙상 본인만 읽기·삭제) — 기록을 누르면 그래프·답변을 다시 표시. 참고한 글 → NotebookLM 패널: 글 전체 텍스트를 한 번에 복사(질문 머리말 + [n] 제목·출처·본문, 패널 표시 시 본문 미리 수집) / URL(/r/{id}) 복사 / NotebookLM 열기 — 복사 도우미는 하단 트레이와 공용(components/notebooklm/nlm-copy.ts)"
+          "config": "components/blog-ask.tsx (next/dynamic 지연 로딩), app/globals.css(.kb-flow). 백엔드 tg-post-saver kb.js · POST /api/kb/ask (NDJSON 스트림, Firebase ID 토큰 필수). 유료회원 이상 전용(일반회원은 잠금 안내). 내 질문 기록 = Firestore users/{uid}/kbChats(서버만 저장, 규칙상 본인만 읽기·삭제) — 기록을 누르면 그래프·답변을 다시 표시. 참고한 글 → NotebookLM 패널: 글 전체 텍스트를 한 번에 복사(질문 머리말 + [n] 제목·출처·본문, 패널 표시 시 본문 미리 수집) / URL(/r/{id}) 복사 / NotebookLM 열기 — 복사 도우미는 하단 트레이와 공용(components/notebooklm/nlm-copy.ts) ⚡ Jev 노드(2026-10-18): 검색과 후보 글 사이 — 후보 15개 판정 시간·비용, 후보 글마다 Jev 점수, 판정 막대(덧붙인 글은 ⚡), 키 없으면 \"꺼짐\"."
         },
         {
           "name": "관리자 키 (id:pass)",
@@ -136,7 +136,7 @@
         {
           "name": "헤르메스 연구소 (연구하기)",
           "purpose": "히어로 아래 질문칸 — 내가 만든 사이트들의 코드·문서를 근거로 헤르메스 에이전트가 연구해 보고서를 쓴다. 에이전트 작업대(카드 준비 → 사서 → 연구원 → 노트북 → 디자이너)가 실제 진행 상태에 맞춰 움직이고, 고른 사이트·보고서·내 연구 기록을 보여준다. 주인장(또는 group=admin)만 보인다",
-          "config": "components/research-panel.tsx (next/dynamic 지연 로딩), components/world-hero.tsx, app/globals.css(.agent-working/.agent-beam/.agent-pop). Firestore researchJobs — 클라이언트는 등록·본인 읽기·삭제만, 진행 기록은 맥북 워커(tg-post-saver research/worker.js)가 firebase-admin 으로 쓴다. 맥북 하트비트 runtime/mac 로 연결 상태 표시 3단계(2026-10-17): 연구가 끝나면 NotebookLM 노트북(보고서·근거 사이트 카드)과 한국어 슬라이드를 맥북이 자동 생성 → 슬라이드 PDF 는 Firestore researchFiles 에 700KB 조각(본인만 읽기)으로 저장, 웹이 이어 붙여 iframe 슬라이드쇼로 재생 + PDF 받기 + NotebookLM 열기(PPTX 는 거기서). Firebase Storage 미사용(버킷 없음)."
+          "config": "components/research-panel.tsx (next/dynamic 지연 로딩), components/world-hero.tsx, app/globals.css(.agent-working/.agent-beam/.agent-pop). Firestore researchJobs — 클라이언트는 등록·본인 읽기·삭제만, 진행 기록은 맥북 워커(tg-post-saver research/worker.js)가 firebase-admin 으로 쓴다. 맥북 하트비트 runtime/mac 로 연결 상태 표시 3단계(2026-10-17): 연구가 끝나면 NotebookLM 노트북(보고서·근거 사이트 카드)과 한국어 슬라이드를 맥북이 자동 생성 → 슬라이드 PDF 는 Firestore researchFiles 에 700KB 조각(본인만 읽기)으로 저장, 웹이 이어 붙여 iframe 슬라이드쇼로 재생 + PDF 받기 + NotebookLM 열기(PPTX 는 거기서). Firebase Storage 미사용(버킷 없음). ⚡ Jev 검증 에이전트(2026-10-18): 사이트 43개 1차 순위 막대 + 사서가 최종 선택한 사이트 ✓ 겹쳐 표시."
         }
       ]
     },

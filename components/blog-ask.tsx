@@ -5,6 +5,8 @@
 // 질문 → 분석 → 검색 → 후보 글 → 관련성 판정 → (지식베이스 답변 | LLM 단독 답변)
 // → 최종 답변 순서의 task graph 로 실시간 표시한다.
 // 관련 글이 없으면 "지식베이스에 없음"을 알리고 LLM 일반 지식으로만 답한다.
+// ⚡ Jev(TypeSafe 결정 모델)가 넓은 후보를 0.5초 안에 먼저 판정한다 — 그래프의 Jev 노드·후보 글 점수·
+// 판정 막대로 실제 동작이 보인다. 키가 없으면 그 노드는 "꺼짐"으로 표시된다.
 // 유료회원 이상 전용. 끝난 질문·답변은 서버가 users/{uid}/kbChats 에 저장하고,
 // 규칙상 본인만 읽고 지울 수 있다 — 기록을 누르면 그래프·답변을 그대로 다시 보여준다.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -43,15 +45,29 @@ import {
   postSourceBlock,
 } from "@/components/notebooklm/nlm-copy";
 
-type StepId = "analyze" | "search" | "judge" | "answer";
+type StepId = "analyze" | "search" | "scout" | "judge" | "answer";
 type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
-const STEP_IDS: StepId[] = ["analyze", "search", "judge", "answer"];
+const STEP_IDS: StepId[] = ["analyze", "search", "scout", "judge", "answer"];
 
 interface Candidate {
   id: string;
   title: string;
   score: number;
   snippet: string;
+  /** ⚡ Jev 판정 — rel: 질문 주제를 다루는가, ev: 답변 근거가 되는가 (0~1) */
+  jev?: { rel: number; ev: number } | null;
+  /** 검색 순위 밖이었지만 Jev 가 확신해 덧붙인 글 */
+  boosted?: boolean;
+}
+interface JevInfo {
+  ms: number;
+  tokens: number;
+  costUsd: number;
+  requests: number;
+  boosted: string[];
+  skipJudge: boolean;
+  model: string;
+  scored: { id: string; title: string; rel: number; ev: number }[];
 }
 interface Judgment {
   id: string;
@@ -87,6 +103,9 @@ interface Run {
   savedAt?: string;
   saveFailed?: boolean;
   fromHistory?: boolean;
+  /** 검색이 Jev 에 넘긴 후보 수 · Jev 판정 결과 */
+  pool?: number;
+  jev?: JevInfo;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,7 +117,11 @@ function fromDoc(id: string, d: Record<string, any>): Run {
   const steps = Object.fromEntries(
     STEP_IDS.map((k) => [
       k,
-      { status: d.steps?.[k]?.status ?? "done", ms: d.steps?.[k]?.ms ?? undefined },
+      {
+        // Jev 이전에 저장된 기록엔 scout 단계가 없다 — 꺼짐으로 그린다
+        status: d.steps?.[k]?.status ?? (k === "scout" ? "skipped" : "done"),
+        ms: d.steps?.[k]?.ms ?? undefined,
+      },
     ]),
   ) as Run["steps"];
   return {
@@ -117,6 +140,7 @@ function fromDoc(id: string, d: Record<string, any>): Run {
     sources: d.sources ?? [],
     model: d.model ?? undefined,
     answer: String(d.answer ?? ""),
+    jev: d.jev ?? undefined,
     done: true,
     savedId: id,
     savedAt: String(d.createdAt ?? ""),
@@ -138,6 +162,7 @@ function newRun(question: string): Run {
     steps: {
       analyze: { status: "pending" },
       search: { status: "pending" },
+      scout: { status: "pending" },
       judge: { status: "pending" },
       answer: { status: "pending" },
     },
@@ -167,7 +192,12 @@ function applyEvent(r: Run, ev: KbEvent): Run {
     if (id === "search" && ev.status === "done") {
       n.posts = d.posts;
       n.chunks = d.chunks;
+      n.pool = d.pool;
       n.candidates = d.candidates;
+    }
+    if (id === "scout" && ev.status === "done") {
+      n.jev = d as JevInfo;
+      n.candidates = d.candidates; // Jev 가 덧붙인 글을 포함한 최종 후보
     }
     if (id === "judge" && d.judgments) n.judgments = d.judgments;
     if (id === "answer" && d.mode) {
@@ -316,13 +346,14 @@ function GEdge({
 
 // 열 좌표 [x, 폭] — viewBox 가로 1000 기준
 const COL = {
-  q: [8, 90],
-  analyze: [126, 104],
-  search: [258, 104],
-  posts: [392, 190],
-  judge: [612, 100],
-  answer: [740, 116],
-  final: [890, 96],
+  q: [8, 84],
+  analyze: [112, 96],
+  search: [228, 96],
+  jev: [344, 84],
+  posts: [450, 170],
+  judge: [646, 92],
+  answer: [762, 110],
+  final: [896, 96],
 } as const;
 const NODE_H = 54;
 const POST_H = 40;
@@ -393,8 +424,12 @@ function TaskGraph({ run }: { run: Run }) {
           const v = verdict(c.id);
           return {
             key: c.id,
-            label: cut(c.title, 14),
-            sub: v ? `${v.relevant ? "✓ 채택" : "✗ 제외"} · 점수 ${c.score}` : `점수 ${c.score}`,
+            label: `${c.boosted ? "⚡" : ""}${cut(c.title, c.boosted ? 12 : 13)}`,
+            sub: v
+              ? `${v.relevant ? "✓ 채택" : "✗ 제외"} · ${c.jev ? `Jev ${c.jev.rel.toFixed(2)}` : `점수 ${c.score}`}`
+              : c.jev
+                ? `점수 ${c.score} · Jev ${c.jev.rel.toFixed(2)}`
+                : `점수 ${c.score}`,
             state: v ? (v.relevant ? "ok" : "off") : "done",
             inEdge: v ? (v.relevant ? "ok" : "off") : "on",
             outEdge: v
@@ -404,7 +439,11 @@ function TaskGraph({ run }: { run: Run }) {
               : steps.judge.status === "running"
                 ? "flow"
                 : "idle",
-            tip: `${c.title}\n\n${c.snippet}${v?.reason ? `\n\n판정: ${v.reason}` : ""}\n\n(클릭하면 새 창에서 열려요)`,
+            tip: `${c.title}\n\n${c.snippet}${
+              c.jev
+                ? `\n\n⚡ Jev: 주제 ${c.jev.rel.toFixed(2)} · 근거 ${c.jev.ev.toFixed(2)}${c.boosted ? " (Jev 가 덧붙인 글)" : ""}`
+                : ""
+            }${v?.reason ? `\n\n판정: ${v.reason}` : ""}\n\n(클릭하면 새 창에서 열려요)`,
             href: postHref(c.id),
           };
         });
@@ -429,10 +468,15 @@ function TaskGraph({ run }: { run: Run }) {
         to={left(COL.search, cy)}
         state={stepEdge(steps.search.status)}
       />
+      <GEdge
+        from={right(COL.search, cy)}
+        to={left(COL.jev, cy)}
+        state={stepEdge(steps.scout.status)}
+      />
       {postRows.map((p, i) => (
         <g key={`e-${p.key}`}>
           <GEdge
-            from={right(COL.search, cy)}
+            from={right(COL.jev, cy)}
             to={left(COL.posts, postY(i) + POST_H / 2)}
             state={p.inEdge}
           />
@@ -507,6 +551,28 @@ function TaskGraph({ run }: { run: Run }) {
         }
         tip={steps.search.note}
       />
+      <GNode
+        x={COL.jev[0]}
+        y={nodeY}
+        w={COL.jev[1]}
+        h={NODE_H}
+        state={stepNode(steps.scout.status)}
+        label="⚡ Jev"
+        sub={
+          run.jev
+            ? `${run.jev.ms}ms · $${run.jev.costUsd}`
+            : steps.scout.status === "running"
+              ? "판정 중…"
+              : steps.scout.status === "skipped"
+                ? "꺼짐"
+                : "대기"
+        }
+        tip={
+          run.jev
+            ? `TypeSafe Jev 가 후보 ${run.jev.requests}개를 ${run.jev.ms}ms 에 판정\n입력 ${run.jev.tokens} 토큰 · $${run.jev.costUsd}`
+            : steps.scout.note
+        }
+      />
       {postRows.map((p, i) => (
         <GNode
           key={p.key}
@@ -561,6 +627,44 @@ function TaskGraph({ run }: { run: Run }) {
   );
 }
 
+// ── ⚡ Jev 판정 막대 — 후보마다 "질문 주제를 다루는가" 확률 (실제 동작을 눈으로) ──────────
+function JevBars({ jev, picked }: { jev: JevInfo; picked: Set<string> }) {
+  const boosted = new Set(jev.boosted);
+  const rows = [...jev.scored].sort((a, b) => b.rel - a.rel).slice(0, 8);
+  return (
+    <ul className="mt-1.5 space-y-1">
+      {rows.map((r) => (
+        <li key={r.id} className="flex items-center gap-2" title={`주제 ${r.rel} · 근거 ${r.ev}`}>
+          <span className="w-40 shrink-0 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
+            {boosted.has(r.id) ? "⚡ " : ""}
+            {r.title}
+          </span>
+          <span className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+            <span
+              className={`block h-full rounded-full ${
+                boosted.has(r.id)
+                  ? "bg-amber-400"
+                  : picked.has(r.id)
+                    ? "bg-sky-500"
+                    : "bg-zinc-400/60"
+              }`}
+              style={{ width: `${Math.round(r.rel * 100)}%` }}
+            />
+          </span>
+          <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-zinc-500">
+            {r.rel.toFixed(2)}
+          </span>
+        </li>
+      ))}
+      <li className="text-[10px] text-zinc-400">
+        <span className="text-sky-500">■</span> 판정에 올린 후보 ·{" "}
+        <span className="text-amber-500">■</span> Jev 가 덧붙인 글 ·{" "}
+        <span className="text-zinc-400">■</span> 제외
+      </li>
+    </ul>
+  );
+}
+
 // ── 단계별 상세 기록 ──────────────────────────────────────
 const STATUS_TEXT: Record<StepStatus, string> = {
   pending: "대기",
@@ -610,14 +714,39 @@ function StepLog({ run }: { run: Run }) {
         {run.candidates && (
           <p className="mt-0.5">
             글 {run.posts?.toLocaleString()}개 · 조각 {run.chunks?.toLocaleString()}개에서 후보{" "}
-            {run.candidates.length}개를 찾았어요.
+            {run.pool && run.pool > run.candidates.length
+              ? `${run.pool}개(⚡ Jev 검증용)`
+              : `${run.candidates.length}개`}
+            를 찾았어요.
           </p>
         )}
       </li>
       <li>
-        {head(3, "관련성 판정", "judge")}
+        {head(3, "⚡ Jev 빠른 검증", "scout")}
+        {steps.scout.status === "skipped" && (
+          <p className="mt-0.5">{steps.scout.note || "Jev 를 쓰지 않았어요."}</p>
+        )}
+        {run.jev && (
+          <>
+            <p className="mt-0.5">
+              후보 {run.jev.requests}개를 {(run.jev.ms / 1000).toFixed(1)}초에 판정 · 입력{" "}
+              {run.jev.tokens.toLocaleString()} 토큰 · ${run.jev.costUsd}
+              {run.jev.skipJudge
+                ? " → 모두 질문과 무관해 Claude 판정을 건너뜀"
+                : run.jev.boosted.length
+                  ? ` → 검색 순위 밖에서 ${run.jev.boosted.length}개를 덧붙임`
+                  : " → 검색 순위 그대로 진행"}
+            </p>
+            <JevBars jev={run.jev} picked={new Set((run.candidates ?? []).map((c) => c.id))} />
+          </>
+        )}
+      </li>
+      <li>
+        {head(4, "관련성 판정", "judge")}
         {steps.judge.status === "skipped" && (
-          <p className="mt-0.5">질문과 겹치는 글이 없어 판정을 건너뛰었어요.</p>
+          <p className="mt-0.5">
+            {steps.judge.note || "질문과 겹치는 글이 없어 판정을 건너뛰었어요."}
+          </p>
         )}
         {run.judgments && run.candidates && (
           <ul className="mt-1 space-y-1">
@@ -644,7 +773,7 @@ function StepLog({ run }: { run: Run }) {
         )}
       </li>
       <li>
-        {head(4, "답변 생성", "answer")}
+        {head(5, "답변 생성", "answer")}
         {run.mode && (
           <p className="mt-0.5">
             {run.mode === "kb"
