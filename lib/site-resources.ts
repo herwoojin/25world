@@ -1,7 +1,7 @@
 "use client";
 
 // 사이트별 부가 자료 — GIT 코드 주소 + 프롬프트(MD) 원문.
-//   · 열람: 유료회원 이상 (사이트 상세 팝업의 GIT코드/프롬프트 버튼)
+//   · 열람: 유료회원 이상 (사이트 상세 팝업의 GIT코드/프롬프트 버튼, Firestore 규칙도 같은 기준)
 //   · 업로드: 관리자만
 // Firestore siteResources/{siteId} 문서 하나에 저장. CategoryOrbital 이
 // 카테고리마다 하나씩(최대 6개) 동시에 떠 있으므로, site-config.ts 와 같은
@@ -58,6 +58,8 @@ async function fetchAllWithRetry(): Promise<Record<string, SiteResource>> {
     try {
       return await fetchAllOnce();
     } catch (e) {
+      // 유료회원 미만은 규칙상 읽을 수 없다(버튼도 잠겨 있다) — 재시도·오류 로그 없이 빈 값
+      if ((e as { code?: string })?.code === "permission-denied") return {};
       lastErr = e;
       if (attempt < 2) await sleep(500 * (attempt + 1));
     }

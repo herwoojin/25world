@@ -83,8 +83,16 @@ service cloud.firestore {
     }
 
     // 사이트별 부가 자료 — GIT 코드 주소·프롬프트(MD) 원문 (siteResources/{siteId})
+    //   · 읽기: 유료회원 이상(paid·vip·admin) 또는 주인장 구글 계정 — 2026-10-22
+    //     (그 전엔 누구나 읽을 수 있어 화면 잠금과 달리 API 로 GIT 주소·유료 프롬프트를 읽을 수 있었다)
+    //   · 쓰기: 관리자 모드(비밀번호)가 카카오 등 어떤 로그인으로도 저장하므로 아직 열어 둔다
     match /siteResources/{siteId} {
-      allow read, write: if true;
+      allow read: if request.auth != null && (
+        (request.auth.token.email == 'herhero78@gmail.com' && request.auth.token.email_verified == true)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('group', 'general') in ['paid', 'vip', 'admin'])
+      );
+      allow write: if true;
     }
 
     // 음성(TTS) 메타·조각·큐
