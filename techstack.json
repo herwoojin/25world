@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-10-22",
+  "lastUpdated": "2026-11-03",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -157,6 +157,11 @@
           "name": "Apps Script 웹앱 (구글 드라이브)",
           "purpose": "자료실 백엔드 — 목록/삭제, 대용량 업로드 토큰, 파일별 VIP(VIP_FILES)·한시적 무료 기간(FREE_WINDOWS), 다운로드 허가(authorize: Firebase ID 토큰 검증 + 무료기간·VIP·유료회원 판정 후 소유자 OAuth 토큰을 tg-post-saver 서버에만 전달, SERVER_SECRET 인증)",
           "config": "scripts/library-webapp.gs, lib/library.ts(requestLibraryDownload), components/library-section.tsx, tg-post-saver server.js(/api/library/ticket·/api/library/file)"
+        },
+        {
+          "name": "비서ON 브리지 v2 (전체 제어)",
+          "purpose": "비서ON(지니)이 연 창·탭에서만 음성으로 화면 읽기·클릭·입력. 삭제·결제·비밀번호는 거부, 저장·게시·로그인은 비서ON 화면 확인 후 실행",
+          "config": "public/bisheon-bridge.js + app/layout.tsx 의 <script data-control=\"full\" data-allow=…>"
         }
       ]
     },

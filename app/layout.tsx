@@ -57,6 +57,9 @@ export default function RootLayout({
           </AuthGate>
         </ErrorBoundary>
         <PwaRegister />
+        {/* 비서ON(지니) 음성 제어 브리지: 비서ON 이 연 창·탭에서만 동작하고 일반 방문자에게는 아무 일도 하지 않음.
+            삭제·결제·비밀번호는 하지 않고, 저장·게시·로그인 같은 버튼은 비서ON 화면에서 사람이 [실행]을 눌러야 함 */}
+        <script src="/bisheon-bridge.js" data-app="25world" data-control="full" data-allow="http://localhost:3000,http://127.0.0.1:3000,https://heoujin-ui-macbookair-1591.tail43923a.ts.net:8443" defer />
       </body>
     </html>
   );
