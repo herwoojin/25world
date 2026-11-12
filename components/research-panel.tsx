@@ -45,6 +45,8 @@ interface Job {
   /** 슬라이드 PDF — Firestore researchFiles 에 조각으로 저장 (이 프로젝트엔 Storage 가 없다) */
   slidesPdf?: { fileId: string; parts: number; bytes: number };
   nlmError?: string;
+  /** 💰 이번 연구 비용 — 헤르메스(실행 기록의 토큰 수) + Jev */
+  cost?: { usd: number; krw: number; claudeUsd: number; jevUsd: number; hermesRuns?: number };
   /** ⚡ Jev 1차 순위 (사이트별 관련도 0~1) */
   jev?: {
     ranking: { id: string; name: string; cat: string; p: number }[];
@@ -442,6 +444,14 @@ export default function ResearchPanel() {
               })}
             </div>
           </div>
+
+          {job.cost && (
+            <p className="mt-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+              💰 이번 연구 비용 약 {job.cost.krw.toLocaleString()}원 (${job.cost.usd.toFixed(3)}) — 헤르메스{" "}
+              {job.cost.hermesRuns ?? ""}회 ${job.cost.claudeUsd.toFixed(3)}
+              {job.cost.jevUsd ? ` + Jev $${job.cost.jevUsd.toFixed(4)}` : ""} · NotebookLM 은 무료
+            </p>
+          )}
 
           {/* ⚡ Jev 1차 순위 — 사서가 최종으로 고른 사이트는 ✓ */}
           {job.jev && (

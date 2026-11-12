@@ -106,6 +106,8 @@ interface Run {
   /** 검색이 Jev 에 넘긴 후보 수 · Jev 판정 결과 */
   pool?: number;
   jev?: JevInfo;
+  /** 💰 이번 답변 비용 — Claude(분석·판정·답변) + Jev, 실제 토큰 사용량 기준 */
+  cost?: { usd: number; krw: number; claudeUsd: number; jevUsd: number; claudeCalls?: number };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,6 +141,7 @@ function fromDoc(id: string, d: Record<string, any>): Run {
     mode: d.mode,
     sources: d.sources ?? [],
     model: d.model ?? undefined,
+    cost: d.cost ?? undefined,
     answer: String(d.answer ?? ""),
     jev: d.jev ?? undefined,
     done: true,
@@ -213,6 +216,7 @@ function applyEvent(r: Run, ev: KbEvent): Run {
     n.mode = ev.mode;
     n.sources = ev.sources;
     n.model = ev.model;
+    n.cost = ev.cost ?? undefined;
   } else if (ev.type === "saved") {
     n.savedId = ev.id;
     n.savedAt = ev.createdAt;
@@ -780,6 +784,13 @@ function StepLog({ run }: { run: Run }) {
               ? `내 지식베이스 글 ${run.sources?.length ?? 0}개를 근거로 답변`
               : "지식베이스에 관련 글이 없어 LLM 일반 지식만으로 답변"}
             {run.model && <span className="text-zinc-400"> · {run.model}</span>}
+          </p>
+        )}
+        {run.cost && (
+          <p className="mt-0.5 font-medium text-amber-600 dark:text-amber-400">
+            💰 이번 답변 비용 약 {run.cost.krw.toLocaleString()}원 (${run.cost.usd.toFixed(4)}) — Claude{" "}
+            {run.cost.claudeCalls ?? ""}회 ${run.cost.claudeUsd.toFixed(4)}
+            {run.cost.jevUsd ? ` + Jev $${run.cost.jevUsd.toFixed(4)}` : ""}
           </p>
         )}
       </li>

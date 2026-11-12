@@ -112,7 +112,12 @@ export default function YoutubeRequest() {
           await sleep(2500);
           setMsg({
             ok: true,
-            text: `"${s.title ?? "블로그 글"}" 을(를) ${e} 로 보냈어요! 메일함을 확인해 보세요 💌`,
+            text:
+              `"${s.title ?? "블로그 글"}" 을(를) ${e} 로 보냈어요! 메일함을 확인해 보세요 💌` +
+              // 💰 이번 변환의 AI 비용 (서버가 Claude 실제 토큰 사용량으로 계산)
+              (s.cost
+                ? ` · 💰 이번 변환 AI 비용 약 ${s.cost.krw.toLocaleString()}원 ($${s.cost.usd.toFixed(4)})`
+                : ""),
           });
           return;
         }
