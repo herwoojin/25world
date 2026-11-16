@@ -197,8 +197,11 @@ function doPost(e) {
     const adminKey = secret_('ADMIN_KEY');
     const isAdmin = !!adminKey && String(body.adminKey || '') === adminKey;
 
-    /** 이 요청자가 이 파일을 받을 수 있는가 → { ok, file, who } 또는 { ok:false, error } */
-    function checkAccess_(id) {
+    /** 이 요청자가 이 파일을 받을 수 있는가 → { ok, file, who } 또는 { ok:false, error }
+     *  serverPaid: tg-post-saver 가 회원 명부(Firestore)에서 실시간으로 확인한 "유료회원 이상" 여부.
+     *  SERVER_SECRET 으로 인증된 authorize 호출에서만 넘어온다 — 등급을 바꾼 뒤 관리자 화면의
+     *  "동기화"를 누르지 않아도 바로 받을 수 있게 (2026-11-16: 주인장도 VIP 파일이 막혔다) */
+    function checkAccess_(id, serverPaid) {
       const file = DriveApp.getFileById(id);
       // 자료실 폴더 밖의 파일 id 를 넣어 내 드라이브 전체를 긁는 것을 막는다
       if (!inLibraryFolder_(file)) return { ok: false, error: 'not-in-library' };
@@ -209,7 +212,7 @@ function doPost(e) {
 
       // 한시적 무료 기간 안이면 등급과 무관하게 받을 수 있다 (로그인은 여전히 필요)
       const freeNow = inFreeWindow_(freeWindowMap_()[id], Date.now());
-      if (!freeNow && isVipFile_(id, file.getName()) && !isPaid_(who)) {
+      if (!freeNow && isVipFile_(id, file.getName()) && !serverPaid && !isPaid_(who)) {
         return { ok: false, error: 'paid-only' };
       }
       return { ok: true, file: file, who: who };
@@ -224,7 +227,7 @@ function doPost(e) {
       if (!serverSecret || String(body.serverSecret || '') !== serverSecret) {
         return json_({ ok: false, error: 'unauthorized' });
       }
-      const r = checkAccess_(String(body.id || ''));
+      const r = checkAccess_(String(body.id || ''), body.serverPaid === true);
       if (!r.ok) return json_(r);
       return json_({
         ok: true,
