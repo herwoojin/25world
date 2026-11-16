@@ -136,19 +136,62 @@ export async function requestDownloadUrl(
   throw new Error(r.error || "다운로드 링크를 받지 못했습니다.");
 }
 
-/** 자료실 파일 받기 — tg-post-saver 서버가 권한을 확인한 뒤 드라이브에서 받아 전달한다.
- *  이메일이 없는 카카오 회원이나 브라우저에 구글 로그인이 안 된 회원도 받을 수 있다.
- *  돌려주는 주소를 새 창으로 열면 바로 다운로드가 시작된다. */
-export async function requestLibraryDownload(opts: {
+export interface LibraryTicket {
+  url: string;
+  name: string;
+  size: number;
+}
+
+export interface DownloadProgress {
+  loaded: number;
+  total: number;
+  speedBps: number;
+}
+
+export type LibraryDownloadResult =
+  | {
+      mode: "blob";
+      blob: Blob;
+      blobUrl: string;
+      name: string;
+      size: number;
+      autoTriggered: boolean;
+    }
+  | {
+      mode: "direct";
+      url: string;
+      name: string;
+      size: number;
+    };
+
+export interface DownloadLocationGuide {
+  location: string;
+  shortcutTip: string;
+}
+
+/** JS 메모리에 Blob 을 통째로 담는 상한(400MB). 이를 넘으면 브라우저 기본 스트리밍으로 넘긴다. */
+const MAX_STREAM_BLOB_BYTES = 400 * 1024 * 1024;
+
+function sanitizeFileName(name: string): string {
+  return (name || "download").replace(/[\\/]/g, "_").trim() || "download";
+}
+
+/** 자료실 다운로드 티켓 발급 — tg-post-saver 서버가 권한을 확인한 뒤 1회성 스트림 주소를 돌려준다.
+ *  이메일이 없는 카카오 회원이나 브라우저에 구글 로그인이 안 된 회원도 받을 수 있다. */
+export async function requestLibraryTicket(opts: {
   fileId: string;
   idToken?: string;
   adminKey?: string;
-}): Promise<string> {
+  signal?: AbortSignal;
+}): Promise<LibraryTicket> {
   // 무료 서버는 잠들어 있을 수 있다 — 먼저 깨운다
-  await fetch(`${BOT_SERVER_URL}/api/wake`).catch(() => {});
+  await fetch(`${BOT_SERVER_URL}/api/wake`, { signal: opts.signal }).catch((e) => {
+    if (opts.signal?.aborted) throw e;
+  });
   const res = await fetch(`${BOT_SERVER_URL}/api/library/ticket`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal: opts.signal,
     body: JSON.stringify({
       fileId: opts.fileId,
       idToken: opts.idToken ?? "",
@@ -156,12 +199,244 @@ export async function requestLibraryDownload(opts: {
     }),
   });
   const r = await res.json().catch(() => ({}));
-  if (r.ok && r.url) return `${BOT_SERVER_URL}${r.url}`;
+  if (r.ok && r.url) {
+    return {
+      url: `${BOT_SERVER_URL}${r.url}`,
+      name: String(r.name || ""),
+      size: Number(r.size || 0),
+    };
+  }
   if (r.error === "login-required")
     throw new Error("로그인 정보를 확인하지 못했어요. 로그아웃 후 다시 로그인해 주세요.");
   if (r.error === "paid-only") throw new Error("유료회원 이상만 받을 수 있는 자료입니다.");
   if (r.error === "not-in-library") throw new Error("자료실에 없는 파일입니다.");
   throw new Error(r.message || "다운로드를 준비하지 못했어요. 잠시 후 다시 시도해 주세요.");
+}
+
+export async function requestLibraryDownload(opts: {
+  fileId: string;
+  idToken?: string;
+  adminKey?: string;
+}): Promise<string> {
+  const ticket = await requestLibraryTicket(opts);
+  return ticket.url;
+}
+
+/** 생성된 Blob URL 로 브라우저 저장을 시작한다 (새 창/빈 창 없이 현재 페이지에서 처리). */
+export function triggerBlobDownload(blobUrl: string, fileName: string): boolean {
+  try {
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = sanitizeFileName(fileName);
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function triggerHiddenIframeDownload(url: string): void {
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  setTimeout(() => iframe.remove(), 60_000);
+}
+
+/** 브라우저가 File System Access API(폴더/저장 위치 직접 선택)를 지원하는지 */
+export function canPickSaveFolder(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function"
+  );
+}
+
+/** 사용자가 직접 저장 위치·파일명을 골라 Blob 을 저장한다 (지원 브라우저 전용). */
+export async function saveBlobWithPicker(
+  blob: Blob,
+  suggestedName: string
+): Promise<string | null> {
+  const picker = (
+    window as unknown as {
+      showSaveFilePicker?: (opts?: { suggestedName?: string }) => Promise<{
+        name: string;
+        createWritable: () => Promise<{
+          write: (data: Blob) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      }>;
+    }
+  ).showSaveFilePicker;
+  if (!picker) return null;
+  const handle = await picker({ suggestedName: sanitizeFileName(suggestedName) });
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  return handle.name;
+}
+
+/** OS·브라우저별 기본 다운로드 폴더 및 다운로드 목록 열기 안내 */
+export function getDownloadLocationGuide(fileName: string): DownloadLocationGuide {
+  const safeName = sanitizeFileName(fileName);
+  if (typeof navigator === "undefined") {
+    return {
+      location: `브라우저 기본 다운로드(Downloads) 폴더 (${safeName})`,
+      shortcutTip:
+        "브라우저 상단의 다운로드 아이콘(↓)을 누르고 '폴더에서 보기'를 선택하면 저장 위치를 바로 열 수 있어요.",
+    };
+  }
+  const ua = navigator.userAgent;
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isMac = !isIOS && /Mac/i.test(ua);
+  const isWin = /Windows/i.test(ua);
+  const isSafari =
+    /Safari/i.test(ua) &&
+    !/Chrome|Chromium|Edg|Whale|OPR|Firefox|FxiOS|CriOS/i.test(ua);
+
+  if (isIOS) {
+    return {
+      location: `「파일」 앱 → 다운로드 폴더 (${safeName})`,
+      shortcutTip:
+        "브라우저 주소창 옆 ↓(다운로드) 아이콘을 누르거나, 홈 화면의 파란색 「파일」 앱 → '다운로드'에서 확인할 수 있어요.",
+    };
+  }
+  if (isAndroid) {
+    return {
+      location: `「내 파일(Files)」 앱 → 다운로드 폴더 (${safeName})`,
+      shortcutTip:
+        "브라우저 우측 상단 메뉴(⋮) → '다운로드' 또는 휴대폰의 「내 파일」 앱에서 바로 열 수 있어요.",
+    };
+  }
+  if (isMac) {
+    return {
+      location: `Finder → 다운로드 폴더 (~/Downloads/${safeName})`,
+      shortcutTip: isSafari
+        ? "Safari 우측 상단 ↓(다운로드) 버튼 또는 Option(⌥) + Command(⌘) + L 을 누른 뒤 돋보기 아이콘을 클릭하면 폴더가 바로 열립니다."
+        : "브라우저 우측 상단 ↓(다운로드) 아이콘 또는 Command(⌘) + Shift + J 를 누른 뒤 'Finder에서 보기'를 누르면 폴더가 바로 열립니다.",
+    };
+  }
+  if (isWin) {
+    return {
+      location: `파일 탐색기 → 다운로드 폴더 (다운로드\\${safeName})`,
+      shortcutTip:
+        "브라우저 우측 상단 ↓(다운로드) 아이콘 또는 Ctrl + J 를 누른 뒤 '폴더 열기'를 누르면 저장 위치가 바로 열립니다.",
+    };
+  }
+  return {
+    location: `브라우저 기본 다운로드(Downloads) 폴더 (${safeName})`,
+    shortcutTip:
+      "브라우저 다운로드 목록(Ctrl + J)에서 '폴더 열기'를 누르면 저장 위치를 바로 확인할 수 있어요.",
+  };
+}
+
+/** 자료실 파일을 현재 탭에서 스트리밍으로 받아 진행률을 알리고, 완료 즉시 저장한다.
+ *  about:blank 새 창을 열지 않으므로 빈 화면이 남지 않는다. */
+export async function downloadLibraryFile(opts: {
+  fileId: string;
+  fileName: string;
+  fileSize?: number;
+  mimeType?: string;
+  idToken?: string;
+  adminKey?: string;
+  signal?: AbortSignal;
+  onStage?: (stage: "authorizing" | "downloading") => void;
+  onProgress?: (p: DownloadProgress) => void;
+}): Promise<LibraryDownloadResult> {
+  opts.onStage?.("authorizing");
+  const ticket = await requestLibraryTicket({
+    fileId: opts.fileId,
+    idToken: opts.idToken,
+    adminKey: opts.adminKey,
+    signal: opts.signal,
+  });
+
+  const safeName = sanitizeFileName(ticket.name || opts.fileName);
+  const expectedSize = ticket.size || opts.fileSize || 0;
+
+  if (expectedSize > MAX_STREAM_BLOB_BYTES) {
+    triggerHiddenIframeDownload(ticket.url);
+    return {
+      mode: "direct",
+      url: ticket.url,
+      name: safeName,
+      size: expectedSize,
+    };
+  }
+
+  opts.onStage?.("downloading");
+  const res = await fetch(ticket.url, { signal: opts.signal, cache: "no-store" });
+  if (!res.ok) {
+    const errText = (await res.text().catch(() => "")).trim();
+    throw new Error(
+      errText && errText.length < 200
+        ? errText
+        : `파일을 내려받지 못했어요 (HTTP ${res.status}). 잠시 후 다시 시도해 주세요.`
+    );
+  }
+
+  const headerLen = Number(res.headers.get("content-length") || 0);
+  const hasEncoding = Boolean(res.headers.get("content-encoding"));
+  const total = (!hasEncoding && headerLen > 0 ? headerLen : 0) || expectedSize;
+  const contentType =
+    res.headers.get("content-type") || opts.mimeType || "application/octet-stream";
+
+  let blob: Blob;
+  if (res.body) {
+    const reader = res.body.getReader();
+    const chunks: BlobPart[] = [];
+    let loaded = 0;
+    const startedAt = Date.now();
+    let lastReportAt = 0;
+
+    opts.onProgress?.({ loaded: 0, total, speedBps: 0 });
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value as BlobPart);
+        loaded += value.byteLength;
+        const now = Date.now();
+        if (now - lastReportAt >= 80) {
+          const elapsedSec = Math.max((now - startedAt) / 1000, 0.1);
+          opts.onProgress?.({ loaded, total, speedBps: loaded / elapsedSec });
+          lastReportAt = now;
+        }
+      }
+    }
+    const elapsedSec = Math.max((Date.now() - startedAt) / 1000, 0.1);
+    opts.onProgress?.({
+      loaded,
+      total: total || loaded,
+      speedBps: loaded / elapsedSec,
+    });
+    blob = new Blob(chunks, { type: contentType });
+  } else {
+    blob = await res.blob();
+    opts.onProgress?.({
+      loaded: blob.size,
+      total: total || blob.size,
+      speedBps: 0,
+    });
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  const autoTriggered = triggerBlobDownload(blobUrl, safeName);
+  return {
+    mode: "blob",
+    blob,
+    blobUrl,
+    name: safeName,
+    size: blob.size || expectedSize,
+    autoTriggered,
+  };
 }
 
 /** 다운로드 허용(유료회원) 목록을 웹앱에 동기화 — 관리자만.

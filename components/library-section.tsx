@@ -7,14 +7,20 @@
 // 실제 저장은 Apps Script 웹앱(scripts/library-webapp.gs)이 내 구글 드라이브에 한다.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AlertCircle,
   CalendarClock,
+  CheckCircle2,
   ChevronDown,
   Download,
+  FolderCheck,
   FolderOpen,
+  Loader2,
   Lock,
   RefreshCw,
+  RotateCcw,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAdminKey, useAdminOn } from "@/lib/admin";
@@ -24,18 +30,53 @@ import { useEffectiveGroup } from "@/lib/membership";
 import { useSiteConfig } from "@/lib/site-config";
 import {
   MAX_UPLOAD_MB,
+  canPickSaveFolder,
   deleteLibraryFile,
+  downloadLibraryFile,
   fileEmoji,
   formatBytes,
   freeWindowStatus,
+  getDownloadLocationGuide,
   listLibraryFiles,
-  requestLibraryDownload,
+  saveBlobWithPicker,
   setLibraryFreeWindow,
   setLibraryVip,
   shortDate,
+  triggerBlobDownload,
   uploadLibraryFile,
   type LibraryFile,
 } from "@/lib/library";
+
+type DownloadState =
+  | {
+      phase: "authorizing";
+      fileId: string;
+      fileName: string;
+    }
+  | {
+      phase: "downloading";
+      fileId: string;
+      fileName: string;
+      loaded: number;
+      total: number;
+      speedBps: number;
+    }
+  | {
+      phase: "completed";
+      fileId: string;
+      fileName: string;
+      size: number;
+      blob: Blob | null;
+      blobUrl: string | null;
+      directUrl: string | null;
+      savedCustomName?: string;
+    }
+  | {
+      phase: "error";
+      fileId: string;
+      fileName: string;
+      message: string;
+    };
 
 function formatKST(iso: string): string {
   try {
@@ -53,6 +94,225 @@ function formatKST(iso: string): string {
   }
 }
 
+function DownloadStatusPanel({
+  state,
+  canPickFolder,
+  onCancel,
+  onRetry,
+  onDismiss,
+  onSaveToFolder,
+}: {
+  state: DownloadState;
+  canPickFolder: boolean;
+  onCancel: () => void;
+  onRetry: () => void;
+  onDismiss: () => void;
+  onSaveToFolder: () => void;
+}) {
+  if (state.phase === "authorizing") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="basis-full rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 text-xs"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2 font-semibold text-sky-700 dark:text-sky-300">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            1/2단계 · 서버 연결 및 다운로드 권한 확인 중…
+          </span>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-300"
+          >
+            취소
+          </button>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sky-500/15">
+          <div className="h-full w-2/5 animate-pulse rounded-full bg-sky-500" />
+        </div>
+        <p className="mt-2 text-zinc-500 dark:text-zinc-400">
+          처음이면 잠든 서버를 깨우느라 최대 30초쯤 걸릴 수 있어요. 새 창 없이 이 화면에서 바로 받아집니다.
+        </p>
+      </div>
+    );
+  }
+
+  if (state.phase === "downloading") {
+    const hasTotal = state.total > 0;
+    const pct = hasTotal
+      ? Math.min(100, Math.round((state.loaded / state.total) * 100))
+      : null;
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="basis-full rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 text-xs"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2 font-semibold text-sky-700 dark:text-sky-300">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            2/2단계 · 파일 내려받는 중…
+            {pct !== null && <span className="font-extrabold">{pct}%</span>}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
+              {formatBytes(state.loaded)}
+              {hasTotal ? ` / ${formatBytes(state.total)}` : ""}
+              {state.speedBps > 0 ? ` · ${formatBytes(state.speedBps)}/s` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-300"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+        <div
+          role="progressbar"
+          aria-valuenow={pct ?? undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sky-500/15"
+        >
+          <div
+            className={`h-full rounded-full bg-sky-500 transition-[width] duration-150 ${
+              pct === null ? "w-1/2 animate-pulse" : ""
+            }`}
+            style={pct !== null ? { width: `${pct}%` } : undefined}
+          />
+        </div>
+        <p className="mt-2 text-zinc-500 dark:text-zinc-400">
+          다운로드가 끝나면 바로 저장 위치와 확인 방법을 알려드릴게요.
+        </p>
+      </div>
+    );
+  }
+
+  if (state.phase === "completed") {
+    const guide = getDownloadLocationGuide(state.fileName);
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="basis-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 font-bold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              {state.directUrl
+                ? `"${state.fileName}" 다운로드를 시작했어요!`
+                : `"${state.fileName}" 다운로드 완료!`}
+              {state.size > 0 && (
+                <span className="ml-1.5 font-normal text-emerald-700/80 dark:text-emerald-300/80">
+                  ({formatBytes(state.size)})
+                </span>
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="다운로드 완료 안내 닫기"
+            className="rounded-full p-1 text-zinc-500 hover:bg-emerald-500/15 hover:text-foreground"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-2 space-y-1 leading-relaxed text-zinc-700 dark:text-zinc-200">
+          {state.savedCustomName ? (
+            <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+              📁 직접 선택하신 폴더에 &ldquo;{state.savedCustomName}&rdquo; 파일로 저장되었어요.
+            </p>
+          ) : (
+            <>
+              <p>
+                <span className="font-semibold">📁 저장 위치:</span> {guide.location}
+              </p>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                <span className="font-semibold">🔍 바로 여는 법:</span> {guide.shortcutTip}
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                ※ 브라우저 보안상 사용자가 따로 바꾼 폴더 경로까지는 웹에서 직접 읽을 수 없어요.
+                다른 폴더로 설정하셨다면 위 다운로드 목록에서 확인하거나 아래에서 저장 폴더를 직접 골라 주세요.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          {state.blobUrl && (
+            <button
+              type="button"
+              onClick={() => triggerBlobDownload(state.blobUrl!, state.fileName)}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-emerald-600/40 bg-background/80 px-3 py-1 font-semibold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              다시 저장
+            </button>
+          )}
+          {state.blob && canPickFolder && (
+            <button
+              type="button"
+              onClick={onSaveToFolder}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 font-semibold text-white hover:bg-emerald-700"
+            >
+              <FolderCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              다른 폴더에 저장…
+            </button>
+          )}
+          {state.directUrl && (
+            <a
+              href={state.directUrl}
+              download={state.fileName}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 font-semibold text-white hover:bg-emerald-700"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              다운로드가 안 시작됐나요? 직접 받기
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="alert"
+      className="basis-full rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-2 font-semibold">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {state.message}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full border border-red-500/40 px-2.5 py-1 font-semibold hover:bg-red-500/10"
+          >
+            다시 시도
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="오류 닫기"
+            className="rounded-full p-1 hover:bg-red-500/10"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LibrarySection() {
   const cfg = useSiteConfig();
   const group = useEffectiveGroup();
@@ -66,6 +326,31 @@ export default function LibrarySection() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dlState, setDlState] = useState<DownloadState | null>(null);
+  const dlAbortRef = useRef<AbortController | null>(null);
+  const dlBlobUrlRef = useRef<string | null>(null);
+  const [canPickFolder, setCanPickFolder] = useState(false);
+
+  useEffect(() => {
+    setCanPickFolder(canPickSaveFolder());
+    return () => {
+      dlAbortRef.current?.abort();
+      if (dlBlobUrlRef.current) {
+        URL.revokeObjectURL(dlBlobUrlRef.current);
+        dlBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearDownloadState = () => {
+    dlAbortRef.current?.abort();
+    dlAbortRef.current = null;
+    if (dlBlobUrlRef.current) {
+      URL.revokeObjectURL(dlBlobUrlRef.current);
+      dlBlobUrlRef.current = null;
+    }
+    setDlState(null);
+  };
 
   // 섹션 접기 — 제목만 남기고 숨기기.
   // 새로 접속(로그인)하면 항상 숨긴 채 시작 — 세션 중 직접 펼친 기록만
@@ -129,37 +414,123 @@ export default function LibrarySection() {
     load();
   };
 
-  // 다운로드 — 웹앱이 신원·등급을 확인한 뒤 내주는 링크로만 연다
   // 다운로드 — tg-post-saver 서버가 권한(로그인·VIP·무료기간·유료회원)을 확인한 뒤
-  // 구글 드라이브에서 받아 그대로 전달한다. 이메일 없는 카카오 회원이나 브라우저에
-  // 구글 로그인이 안 된 회원도 받을 수 있다.
+  // 구글 드라이브에서 받아 현재 화면에서 실시간 진행률과 함께 내려받는다.
+  // about:blank 새 창을 열지 않으므로 빈 화면이 남지 않고, 완료 후 저장 위치도 바로 안내한다.
   const download = async (f: LibraryFile) => {
     setError("");
+    clearDownloadState();
+
     const adminKey = getAdminKey();
     const user = getFirebaseAuth().currentUser;
     if (!adminKey && !user) {
-      setError("로그인 정보가 없어요. 새로고침한 뒤 다시 로그인해 주세요.");
+      setDlState({
+        phase: "error",
+        fileId: f.id,
+        fileName: f.name,
+        message: "로그인 정보가 없어요. 새로고침한 뒤 다시 로그인해 주세요.",
+      });
       return;
     }
 
-    // 준비(서버 깨우기·권한 확인)에 몇 초 걸린다. 그 뒤에 새 창을 열면 팝업 차단에
-    // 막히므로, 클릭 순간 빈 창을 먼저 열어 두고 주소가 오면 그 창으로 보낸다.
-    const win = window.open("about:blank", "_blank");
-    setBusy(`"${f.name}" 준비 중… (처음이면 서버를 깨우느라 30초쯤 걸릴 수 있어요)`);
+    const controller = new AbortController();
+    dlAbortRef.current = controller;
+    setDlState({ phase: "authorizing", fileId: f.id, fileName: f.name });
+
     try {
       const idToken = await user?.getIdToken();
-      const link = await requestLibraryDownload({ fileId: f.id, idToken, adminKey });
-      if (win) {
-        win.opener = null;
-        win.location.href = link;
+      const result = await downloadLibraryFile({
+        fileId: f.id,
+        fileName: f.name,
+        fileSize: f.size,
+        mimeType: f.mimeType,
+        idToken,
+        adminKey,
+        signal: controller.signal,
+        onStage: (stage) => {
+          if (stage === "downloading") {
+            setDlState({
+              phase: "downloading",
+              fileId: f.id,
+              fileName: f.name,
+              loaded: 0,
+              total: f.size,
+              speedBps: 0,
+            });
+          }
+        },
+        onProgress: ({ loaded, total, speedBps }) => {
+          setDlState({
+            phase: "downloading",
+            fileId: f.id,
+            fileName: f.name,
+            loaded,
+            total,
+            speedBps,
+          });
+        },
+      });
+
+      if (result.mode === "blob") {
+        dlBlobUrlRef.current = result.blobUrl;
+        setDlState({
+          phase: "completed",
+          fileId: f.id,
+          fileName: result.name,
+          size: result.size,
+          blob: result.blob,
+          blobUrl: result.blobUrl,
+          directUrl: null,
+        });
       } else {
-        window.location.href = link; // 빈 창도 막힌 환경이면 현재 탭에서 받는다
+        setDlState({
+          phase: "completed",
+          fileId: f.id,
+          fileName: result.name,
+          size: result.size,
+          blob: null,
+          blobUrl: null,
+          directUrl: result.url,
+        });
       }
     } catch (e) {
-      win?.close();
-      setError(e instanceof Error ? e.message : "다운로드에 실패했습니다.");
+      if (
+        controller.signal.aborted ||
+        (e instanceof DOMException && e.name === "AbortError")
+      ) {
+        setDlState(null);
+        return;
+      }
+      setDlState({
+        phase: "error",
+        fileId: f.id,
+        fileName: f.name,
+        message: e instanceof Error ? e.message : "다운로드에 실패했습니다.",
+      });
+    } finally {
+      if (dlAbortRef.current === controller) {
+        dlAbortRef.current = null;
+      }
     }
-    setBusy("");
+  };
+
+  const cancelDownload = () => {
+    clearDownloadState();
+  };
+
+  const saveToPickedFolder = async () => {
+    if (!dlState || dlState.phase !== "completed" || !dlState.blob) return;
+    try {
+      const savedName = await saveBlobWithPicker(dlState.blob, dlState.fileName);
+      if (savedName) {
+        setDlState((prev) =>
+          prev && prev.phase === "completed" ? { ...prev, savedCustomName: savedName } : prev
+        );
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(e instanceof Error ? e.message : "다른 폴더에 저장하지 못했습니다.");
+    }
   };
 
   const remove = async (f: LibraryFile) => {
@@ -246,6 +617,10 @@ export default function LibrarySection() {
     }
     setBusy("");
   };
+
+  const isDownloading =
+    dlState?.phase === "authorizing" || dlState?.phase === "downloading";
+  const actionBusy = Boolean(busy) || isDownloading;
 
   const heading = (
     <h2 className="flex items-center gap-3 text-2xl font-bold tracking-tight">
@@ -337,7 +712,7 @@ export default function LibrarySection() {
                 />
                 <Button
                   onClick={() => inputRef.current?.click()}
-                  disabled={Boolean(busy)}
+                  disabled={actionBusy}
                   className="gap-1.5"
                 >
                   <Upload className="h-3.5 w-3.5" aria-hidden="true" />
@@ -374,6 +749,17 @@ export default function LibrarySection() {
               const win = freeWindowStatus(f);
               // 무료 기간 중에는 등급과 무관하게 받을 수 있다 (실제 허용은 서버가 판정)
               const locked = vip && !paidUp && win !== "active";
+              const isThisFile = dlState?.fileId === f.id;
+              const isThisDownloading =
+                isThisFile &&
+                (dlState?.phase === "authorizing" || dlState?.phase === "downloading");
+              const dlButtonLabel = !isThisDownloading
+                ? "다운로드"
+                : dlState.phase === "authorizing"
+                  ? "준비 중…"
+                  : dlState.total > 0
+                    ? `${Math.min(100, Math.round((dlState.loaded / dlState.total) * 100))}% 받는 중`
+                    : "받는 중…";
               return (
               <article
                 key={f.id}
@@ -446,19 +832,27 @@ export default function LibrarySection() {
                   <button
                     type="button"
                     onClick={() => download(f)}
-                    disabled={Boolean(busy)}
+                    disabled={actionBusy}
                     aria-label={`${f.name} 다운로드`}
-                    className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-400 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+                    className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                      isThisDownloading
+                        ? "border-sky-500/60 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                        : "border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:text-foreground dark:border-zinc-700 dark:text-zinc-300"
+                    }`}
                   >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                    다운로드
+                    {isThisDownloading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {dlButtonLabel}
                   </button>
                 )}
                 {adminOn && (
                   <button
                     type="button"
                     onClick={() => toggleVip(f)}
-                    disabled={Boolean(busy)}
+                    disabled={actionBusy}
                     aria-pressed={vip}
                     aria-label={`${f.name} 유료 전용 지정 토글`}
                     title={vip ? "유료 전용 해제" : "유료 전용(VIP) 지정"}
@@ -477,7 +871,7 @@ export default function LibrarySection() {
                     onClick={() =>
                       winEdit?.id === f.id ? setWinEdit(null) : openWindowEditor(f)
                     }
-                    disabled={Boolean(busy)}
+                    disabled={actionBusy}
                     aria-expanded={winEdit?.id === f.id}
                     aria-label={`${f.name} 한시적 무료 기간 설정`}
                     title="한시적 무료 기간 설정"
@@ -495,12 +889,22 @@ export default function LibrarySection() {
                   <button
                     type="button"
                     onClick={() => remove(f)}
-                    disabled={Boolean(busy)}
+                    disabled={actionBusy}
                     aria-label={`${f.name} 삭제`}
                     className="flex min-h-[44px] w-11 items-center justify-center rounded-full border border-zinc-300 text-red-500 transition-colors hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-zinc-700"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
+                )}
+                {isThisFile && dlState && (
+                  <DownloadStatusPanel
+                    state={dlState}
+                    canPickFolder={canPickFolder}
+                    onCancel={cancelDownload}
+                    onRetry={() => download(f)}
+                    onDismiss={clearDownloadState}
+                    onSaveToFolder={saveToPickedFolder}
+                  />
                 )}
                 {adminOn && winEdit?.id === f.id && (
                   <form
