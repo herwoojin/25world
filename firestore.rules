@@ -144,6 +144,12 @@ service cloud.firestore {
     }
 
     // ★ 방문자 실시간 집계 (stats/visitors, stats/daily_{날짜})
+    // 자료실 다운로드 횟수 — tg-post-saver 서버(firebase-admin)만 기록, 관리자 화면이 읽는다
+    match /libraryStats/{fileId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /stats/{docId} {
       allow read, write: if true;
     }

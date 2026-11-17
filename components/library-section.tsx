@@ -24,7 +24,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAdminKey, useAdminOn } from "@/lib/admin";
-import { getFirebaseAuth } from "@/lib/firebase";
+import { collection, getDocs, getFirestore } from "firebase/firestore";
+import { getFirebaseApp, getFirebaseAuth } from "@/lib/firebase";
 import { beginLoading, endLoading } from "@/lib/loading-bus";
 import { useEffectiveGroup } from "@/lib/membership";
 import { useSiteConfig } from "@/lib/site-config";
@@ -389,6 +390,21 @@ export default function LibrarySection() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 관리자 모드: 파일별 다운로드 횟수 (tg-post-saver 가 끝까지 받은 경우만 기록 — libraryStats/{fileId})
+  const [dlStats, setDlStats] = useState<Record<string, { downloads: number; lastAt?: string }>>({});
+  useEffect(() => {
+    if (!adminOn || !files) return;
+    getDocs(collection(getFirestore(getFirebaseApp()), "libraryStats"))
+      .then((s) => {
+        const m: Record<string, { downloads: number; lastAt?: string }> = {};
+        s.forEach((d) => {
+          m[d.id] = { downloads: Number(d.get("downloads") || 0), lastAt: d.get("lastAt") };
+        });
+        setDlStats(m);
+      })
+      .catch(() => {});
+  }, [adminOn, files]);
 
   const upload = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -817,6 +833,18 @@ export default function LibrarySection() {
                   <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
                     {formatBytes(f.size)} · {formatKST(f.updatedAt)}
                     {f.desc && ` · ${f.desc}`}
+                    {adminOn && (
+                      <span
+                        title={
+                          dlStats[f.id]?.lastAt
+                            ? `마지막 다운로드 ${formatKST(dlStats[f.id].lastAt!)} · 관리자 모드에서 받은 것은 제외`
+                            : "관리자 모드에서 받은 것은 제외"
+                        }
+                        className="ml-1 font-semibold text-violet-500"
+                      >
+                        · ⬇ 다운로드 {(dlStats[f.id]?.downloads ?? 0).toLocaleString()}회
+                      </span>
+                    )}
                   </span>
                 </span>
                 {locked ? (

@@ -1,7 +1,7 @@
 {
   "project": "25world",
   "description": "바이브코딩으로 만든 20개 사이트의 단일 진입점 포털 (히어로 캐러셀 + 카테고리별 타원 노드)",
-  "lastUpdated": "2026-11-16",
+  "lastUpdated": "2026-11-17",
   "architectureSummary": "Next.js 14 App Router 정적 내보내기(output:'export') → out/ 폴더를 Netlify에 정적 호스팅. DB 없음, lib/sites.ts가 단일 데이터 소스.",
   "repo": "(GitHub 연동 예정)",
   "categories": [
@@ -180,7 +180,7 @@
         {
           "name": "구글 드라이브 폴더 (자료실)",
           "purpose": "회원 공유 자료 원본 저장소 — 폴더 1HlcB_X5…dOFmz",
-          "config": "scripts/library-webapp.gs (FOLDER_ID)"
+          "config": "scripts/library-webapp.gs (FOLDER_ID) 다운로드 횟수(2026-11-17): 끝까지 받은 경우만 티켓당 1회, 관리자 모드 제외 → Firestore libraryStats/{fileId}(downloads·lastAt, 서버만 쓰기·누구나 읽기). 관리자 모드 자료실 각 파일에 '⬇ 다운로드 N회'. 유료 판정은 serverPaid(회원 명부 실시간, 2026-11-16)"
         },
         {
           "name": "Firestore previews/{id}",
